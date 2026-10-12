@@ -1,0 +1,44 @@
+# Single-container image for self-hosting: Heroku, or locally via
+# docker-compose.selfhost.yml (see docs/self_hosting.md).
+# Heroku runs one web process on $PORT, and the app's auth cookie is
+# SameSite=Lax, so frontend and API must share one origin: nginx serves the
+# built frontend on $PORT and proxies API paths to uvicorn on 127.0.0.1:8000.
+
+# ── Frontend build ────────────────────────────────────────────────────────────
+FROM node:20-alpine AS frontend
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ .
+# Empty API URL = same-origin requests; drop the production domain baked into .env.production.
+RUN rm -f .env.production && VITE_API_URL= npm run build
+
+# ── Backend + nginx ───────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Same CPU-only torch pin as backend/Dockerfile (docling pulls in torch).
+RUN pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch==2.12.1 torchvision==0.27.1
+
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+RUN apt-get update && apt-get install -y --no-install-recommends nginx \
+    && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
+
+COPY backend/ /app/
+COPY prompts/ /prompts/
+COPY --from=frontend /app/dist /usr/share/nginx/html
+COPY frontend/nginx.conf /etc/papermanager/nginx.conf
+COPY deploy/selfhost/start.sh /start.sh
+RUN chmod +x /start.sh
+
+CMD ["/start.sh"]

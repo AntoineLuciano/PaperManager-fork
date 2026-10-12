@@ -1,0 +1,39 @@
+# Self-hosting on one machine: Neo4j + the single-container app
+# (Dockerfile.selfhost). Open http://localhost:8080. See docs/self_hosting.md.
+# The repo's docker-compose.yml is the maintainer's production stack (Traefik,
+# own domain, remote GPU host) and is not meant to be reused as is.
+services:
+  neo4j:
+    image: neo4j:5.15
+    restart: unless-stopped
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.meta.*,apoc.schema.*
+    volumes:
+      - neo4j_data:/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.selfhost
+    restart: unless-stopped
+    depends_on:
+      - neo4j
+    ports:
+      - "8080:8080"
+    env_file: .env
+    environment:
+      - PORT=8080
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - FRONTEND_URL=http://localhost:8080
+      - TRUSTED_HOSTS=localhost,127.0.0.1
+    # Google Drive OAuth files created in step 3 of the guide; token.json is
+    # rewritten when the access token refreshes, so it is mounted read-write.
+    volumes:
+      - ./backend/credentials.json:/app/credentials.json:ro
+      - ./backend/token.json:/app/token.json
+
+volumes:
+  neo4j_data:

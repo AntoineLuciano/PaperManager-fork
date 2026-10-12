@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
-"""Create the default 'niklas' user with a password."""
+"""Create the owner account (DEFAULT_USER_NAME, "niklas" by default) as admin."""
 import sys
 import os
 from getpass import getpass
 
 # Add parent directory to path so we can import from backend
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from config import settings
 from db.connection import get_driver
 from db.queries.users import create_user_with_password, get_user_by_name, update_user_password
 from services.auth import hash_password
 
 
 def create_default_user():
-    """Create or update the default niklas user."""
+    """Create or update the owner account."""
     driver = get_driver()
     
-    username = "niklas"
+    username = settings.default_user_name or "niklas"
     
     # Check if user already exists
     existing_user = get_user_by_name(driver, username)
@@ -58,7 +59,7 @@ def create_default_user():
             sys.exit(1)
         
         password_hash = hash_password(password)
-        user = create_user_with_password(driver, username, password_hash)
+        user = create_user_with_password(driver, username, password_hash, is_admin=True)
         print(f"✓ User '{username}' created successfully!")
         print(f"  User ID: {user['id']}")
 

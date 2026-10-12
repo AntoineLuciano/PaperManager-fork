@@ -36,6 +36,13 @@ cd backend && python scripts/create_default_user.py && cd ..
 
 ---
 
+## Hosting your own instance
+
+[docs/self_hosting.md](docs/self_hosting.md) runs PaperManager on localhost (`docker-compose.selfhost.yml`)
+or on Heroku (`heroku.yml`), with your own database and keys.
+
+---
+
 ## Developer Context
 
 All in-depth context files for working on this codebase live in [.specs/](.specs/):

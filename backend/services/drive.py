@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -62,6 +63,9 @@ def get_drive_service():
     token_file = _get_token_file()
     if token_file.exists():
         creds = Credentials.from_authorized_user_file(str(token_file), _SCOPES)
+    elif settings.google_token_json.strip():
+        # Hosts without a persistent disk (Heroku) pass token.json's contents as an env var.
+        creds = Credentials.from_authorized_user_info(json.loads(settings.google_token_json), _SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:

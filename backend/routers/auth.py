@@ -4,6 +4,7 @@ import logging
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, status, Depends, Response
 
+from config import settings
 from db.connection import get_driver
 from db.queries.users import create_user_with_password, get_user_by_name, is_user_admin, list_users, update_user_password, delete_user, merge_users, update_user_ai_keys
 from services.auth import (
@@ -68,10 +69,11 @@ def _require_niklas_admin(current_user: str) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only administrators can perform this action"
         )
-    if current_user.lower() != "niklas":
+    owner = (settings.default_user_name or "niklas").strip().lower()
+    if current_user.lower() != owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only user 'niklas' can perform this action"
+            detail=f"Only user '{owner}' can perform this action"
         )
 
 

@@ -69,6 +69,7 @@ nav:
     - Paper Detail: user-guide/paper-detail.md
     - Knowledge Features: user-guide/knowledge-features.md
     - MCP Server (Claude): user-guide/mcp-server.md
+    - Hosting Your Own: self_hosting.md
   - Technical Reference:
     - Architecture: technical/architecture.md
     - Backend: technical/backend.md

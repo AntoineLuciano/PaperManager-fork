@@ -1,0 +1,4 @@
+# Heroku container build (`heroku stack:set container`); see docs/self_hosting.md.
+build:
+  docker:
+    web: Dockerfile.selfhost
