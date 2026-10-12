@@ -7,13 +7,13 @@ from config import settings
 from db.connection import get_driver
 from db.queries.users import get_user_ai_keys
 from services.auth import get_request_user
-
-
-NIKLAS_USER = "niklas"
+from services.claude_code_chat import claude_code_available
 
 
 def _is_niklas(username: Optional[str]) -> bool:
-    return bool(username and username.strip().lower() == NIKLAS_USER)
+    """True for the instance owner (DEFAULT_USER_NAME, "niklas" by default)."""
+    owner = (settings.default_user_name or "niklas").strip().lower()
+    return bool(username and username.strip().lower() == owner)
 
 
 def _normalize(value: Optional[str]) -> str:
@@ -25,7 +25,7 @@ def get_effective_ai_config(username: Optional[str] = None) -> dict:
     Return effective AI config for a user.
 
     Rules:
-    - For user 'niklas': fall back to env keys when user-specific keys are not set.
+    - For the owner (DEFAULT_USER_NAME): fall back to env keys when user-specific keys are not set.
     - For all other users: only use user-specific keys from DB.
     - Outside authenticated request (username is None): use env keys.
     """
@@ -89,4 +89,5 @@ def get_masked_ai_config(username: str) -> dict:
         "effective_anthropic_work_base_url": _normalize(effective["anthropic_work_base_url"]),
         "source_personal": effective["source_personal"],
         "source_work": effective["source_work"],
+        "claude_code_available": claude_code_available(username),
     }

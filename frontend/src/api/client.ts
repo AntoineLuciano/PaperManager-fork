@@ -73,6 +73,7 @@ export interface MyAiKeyStatus {
   effective_anthropic_work_base_url: string;
   source_personal: "user" | "env" | "none";
   source_work: "user" | "env" | "none";
+  claude_code_available: boolean;
 }
 
 export interface UpdateMyAiKeysBody {

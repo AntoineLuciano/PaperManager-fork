@@ -13,10 +13,11 @@ import type {
   Tag, Topic, Paper,
 } from "../types";
 import { useAppSettings } from "../contexts/SettingsContext";
+import { CHAT_MODEL_LABELS, useChatModels, type ChatModel } from "../lib/chatModels";
 
 const CONTEXT_LIMIT = 200_000;
-type Model = "claude" | "claude-work" | "litellm";
-const MODEL_LABELS: Record<Model, string> = { claude: "Claude", "claude-work": "Claude (Work)", litellm: "Gemma (LiteLLM)" };
+type Model = ChatModel;
+const MODEL_LABELS = CHAT_MODEL_LABELS;
 
 // ── Context Bar ───────────────────────────────────────────────────────────────
 
@@ -152,6 +153,7 @@ export default function KnowledgeChat() {
     settings.knowledgeChatDefaultModel === "ollama" ? "litellm" : settings.knowledgeChatDefaultModel as Model
   );
   const [useWeb, setUseWeb] = useState<boolean>(settings.knowledgeChatUseWeb);
+  const models = useChatModels();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("");  // web search status
@@ -510,7 +512,7 @@ export default function KnowledgeChat() {
 
             {/* Model selector */}
             <div className="flex rounded-md border border-gray-700 overflow-hidden text-xs">
-              {(["claude", "claude-work", "litellm"] as Model[]).map((m) => (
+              {models.map((m) => (
                 <button
                   key={m}
                   onClick={() => setModel(m)}

@@ -239,7 +239,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     question: str
     history: list[ChatMessage] = []
-    model: str = "litellm"  # "claude" | "litellm"
+    model: str = "litellm"  # "claude" | "claude-work" | "claude-code" | "litellm"
     conversation_id: str | None = None
 
 

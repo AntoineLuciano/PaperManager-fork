@@ -7,6 +7,8 @@ pydantic-settings
 python-multipart
 pypdf
 anthropic
+# Claude Code on a Claude subscription; the wheel bundles the CLI binary.
+claude-agent-sdk
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib

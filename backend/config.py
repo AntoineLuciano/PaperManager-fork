@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     google_drive_folder_id: str = ""
     google_credentials_file: str = ""
     google_token_file: str = ""
+    # Contents of token.json, for hosts without a persistent disk (Heroku).
+    google_token_json: str = ""
 
     # Anthropic (personal)
     anthropic_api_key: str = ""
@@ -39,6 +41,13 @@ class Settings(BaseSettings):
     # Anthropic (work / Foundry enterprise gateway)
     anthropic_work_api_key: str = ""
     anthropic_work_base_url: str = ""
+
+    # Claude Code on a Claude subscription (services/claude_code_chat.py).
+    # Comma-separated usernames allowed to pick the "claude-code" model; empty
+    # disables it. A subscription is personal — list only its owner.
+    claude_code_users: str = ""
+    # Long-lived token from `claude setup-token`; unset falls back to ~/.claude login.
+    claude_code_oauth_token: str = ""
 
     # App
     backend_port: int = 8000

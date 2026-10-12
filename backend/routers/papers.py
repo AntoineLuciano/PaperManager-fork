@@ -37,6 +37,7 @@ from services.ai import (
     extract_affiliations_with_litellm,
     extract_claims,
 )
+from services.claude_code_chat import chat_with_paper_claude_code
 from services.references import extract_references
 from services.figure_extractor import extract_figures
 from services.drive import upload_image
@@ -1470,6 +1471,8 @@ def chat(paper_id: str, body: ChatRequest, x_user_name: Optional[str] = Header(N
         answer = chat_with_paper_litellm(**kwargs)
     elif body.model == "claude-work":
         answer = chat_with_paper_work(**kwargs)
+    elif body.model == "claude-code":
+        answer = chat_with_paper_claude_code(**kwargs)
     else:
         answer = chat_with_paper(**kwargs)
 

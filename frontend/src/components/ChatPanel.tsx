@@ -10,14 +10,10 @@ import {
   deletePaperConversation, chatWithPaper,
 } from "../api/client";
 import type { Conversation, KnowledgeMessage } from "../types";
+import { CHAT_MODEL_LABELS, useChatModels, type ChatModel } from "../lib/chatModels";
 
-type Model = "claude" | "claude-work" | "litellm";
-
-const MODEL_LABELS: Record<Model, string> = {
-  claude: "Claude",
-  "claude-work": "Claude (Work)",
-  litellm: "Gemma (LiteLLM)",
-};
+type Model = ChatModel;
+const MODEL_LABELS = CHAT_MODEL_LABELS;
 
 const mdPlugins = {
   remarkPlugins: [remarkGfm, remarkMath],
@@ -37,6 +33,7 @@ export default function ChatPanel({ paperId }: Props) {
   const [loadingMsgs, setLoadingMsgs]     = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [model, setModel]                 = useState<Model>("litellm");
+  const models = useChatModels();
 
   // Title editing
   const [editingTitle, setEditingTitle]   = useState(false);
@@ -235,7 +232,7 @@ export default function ChatPanel({ paperId }: Props) {
         {/* Input for new conversation */}
         <div className="flex flex-col gap-1.5 shrink-0">
           <div className="flex rounded border border-gray-200 overflow-hidden text-[10px] self-start">
-            {(["claude", "claude-work", "litellm"] as Model[]).map((m) => (
+            {models.map((m) => (
               <button key={m} onClick={() => setModel(m)}
                 className={`px-1.5 py-0.5 transition-colors ${model === m ? "bg-violet-600 text-white" : "text-gray-500 hover:bg-gray-50"}`}>
                 {MODEL_LABELS[m]}
@@ -310,7 +307,7 @@ export default function ChatPanel({ paperId }: Props) {
 
         <div className="flex items-center gap-1 shrink-0">
           <div className="flex rounded border border-gray-200 overflow-hidden text-[10px]">
-            {(["claude", "claude-work", "litellm"] as Model[]).map((m) => (
+            {models.map((m) => (
               <button key={m} onClick={() => setModel(m)}
                 className={`px-1.5 py-0.5 transition-colors ${model === m ? "bg-violet-600 text-white" : "text-gray-500 hover:bg-gray-50"}`}>
                 {MODEL_LABELS[m]}

@@ -451,6 +451,104 @@ def _condense_paper_for_budget(title: str, raw_text: str, target_tokens: int) ->
     return msg.content[0].text.strip()
 
 
+def execute_library_tool(name: str, args: dict[str, Any], driver: Any) -> tuple[dict[str, Any], str] | None:
+    """Run one of the Knowledge Chat library tools.
+
+    Returns ``(step_event, result_text)``, where ``step_event`` is the UI
+    reasoning-step dict and ``result_text`` is what goes back to the model, or
+    None when *name* is not a library tool. Shared by the API-key loop and the
+    Claude Code (subscription) path in ``services.claude_code_chat``.
+    """
+    desc: str = args.get("description", "Running tool")
+
+    if name == "run_cypher":
+        query: str = args.get("query", "")
+        rows = _run_cypher_safe(driver, query) if driver else [{"error": "No DB driver available"}]
+        step = {
+            "type": "step",
+            "description": desc,
+            "cypher": query,
+            "count": len(rows) if not (len(rows) == 1 and "error" in rows[0]) else None,
+        }
+        return step, json.dumps(rows)
+
+    if name == "semantic_search":
+        sem_query: str = args.get("query", "")
+        limit: int = min(int(args.get("limit", 10)), 20)
+        if driver and sem_query:
+            try:
+                from services.embeddings import embed_text as _embed_text
+                emb = _embed_text(sem_query)
+                with driver.session() as _sess:
+                    _result = _sess.run(
+                        "CALL db.index.vector.queryNodes('paper_embeddings', $k, $emb) "
+                        "YIELD node AS p, score "
+                        "WHERE score > 0.60 "
+                        "RETURN p.id AS id, p.title AS title, p.year AS year, "
+                        "p.abstract AS abstract, p.summary AS summary, score "
+                        "ORDER BY score DESC",
+                        k=limit,
+                        emb=emb,
+                    )
+                    sem_rows = [
+                        {k: _safe_value(v) for k, v in r.items() if k != "raw_text"}
+                        for r in _result
+                    ][:limit]
+            except Exception as exc:
+                log.warning("semantic_search tool failed | %s", exc)
+                sem_rows = [{"error": str(exc)}]
+        else:
+            sem_rows = [{"error": "Vector search unavailable"}]
+        step = {
+            "type": "step",
+            "description": desc,
+            "cypher": f"[vector search] {sem_query}",
+            "count": len(sem_rows) if not (len(sem_rows) == 1 and "error" in sem_rows[0]) else None,
+        }
+        return step, json.dumps(sem_rows)
+
+    if name == "load_full_text":
+        lft_paper_id: str = args.get("paper_id", "")
+        lft_title = lft_paper_id  # fallback label
+        if driver and lft_paper_id:
+            try:
+                with driver.session() as _sess:
+                    row = _sess.run(
+                        "MATCH (p:Paper {id: $id}) RETURN p.raw_text AS raw_text, p.title AS title",
+                        id=lft_paper_id,
+                    ).single()
+                if row and row["raw_text"]:
+                    raw = row["raw_text"]
+                    lft_title = row["title"] or lft_paper_id
+                    raw_tokens = estimate_tokens(raw)
+                    budget_tokens = 15_000
+                    if raw_tokens <= budget_tokens:
+                        lft_content = raw
+                        tok_label = f"{raw_tokens:,} tokens"
+                    else:
+                        lft_content = _condense_paper_for_budget(lft_title, raw, budget_tokens)
+                        tok_label = f"condensed to ~{estimate_tokens(lft_content):,} tokens"
+                else:
+                    lft_content = "[Full text not available for this paper]"
+                    tok_label = "no text stored"
+            except Exception as exc:
+                log.warning("load_full_text tool failed | %s", exc)
+                lft_content = f"[Error loading full text: {exc}]"
+                tok_label = "error"
+        else:
+            lft_content = "[Full text unavailable — no database connection]"
+            tok_label = "unavailable"
+        step = {
+            "type": "step",
+            "description": f"Loading full text: {lft_title[:60]} ({tok_label})",
+            "cypher": None,
+            "count": None,
+        }
+        return step, lft_content
+
+    return None
+
+
 def estimate_tokens(text: str) -> int:
     """Rough token estimate: ~4 chars per token."""
     return max(1, len(text) // 4)
@@ -487,6 +585,14 @@ def knowledge_chat_stream(
         if p.get("_conversations"):
             parts.append(f"Previous chat history about this paper:\n{p['_conversations']}")
         return "\n".join(parts)
+
+    # ── Claude Code (subscription) path ──────────────────────────────────────
+    if model == "claude-code":
+        from services.claude_code_chat import knowledge_chat_claude_code
+        papers_block = "\n\n".join(_paper_block(p) for p in papers)
+        system = _load_prompt("knowledge_chat_system.txt").replace("{papers_block}", papers_block)
+        yield from knowledge_chat_claude_code(system, history, question, driver, use_web)
+        return
 
     # ── Web pre-search ────────────────────────────────────────────────────────
     web_context = ""
@@ -584,108 +690,16 @@ def knowledge_chat_stream(
         for block in response.content:
             if block.type != "tool_use":
                 continue
-
-            desc: str = block.input.get("description", "Running tool")
-
-            if block.name == "run_cypher":
-                query: str = block.input.get("query", "")
-                rows = _run_cypher_safe(driver, query) if driver else [{"error": "No DB driver available"}]
-                yield {
-                    "type": "step",
-                    "description": desc,
-                    "cypher": query,
-                    "count": len(rows) if not (len(rows) == 1 and "error" in rows[0]) else None,
-                }
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": json.dumps(rows),
-                })
-
-            elif block.name == "semantic_search":
-                sem_query: str = block.input.get("query", "")
-                limit: int = min(int(block.input.get("limit", 10)), 20)
-                if driver and sem_query:
-                    try:
-                        from services.embeddings import embed_text as _embed_text
-                        emb = _embed_text(sem_query)
-                        with driver.session() as _sess:
-                            _result = _sess.run(
-                                "CALL db.index.vector.queryNodes('paper_embeddings', $k, $emb) "
-                                "YIELD node AS p, score "
-                                "WHERE score > 0.60 "
-                                "RETURN p.id AS id, p.title AS title, p.year AS year, "
-                                "p.abstract AS abstract, p.summary AS summary, score "
-                                "ORDER BY score DESC",
-                                k=limit,
-                                emb=emb,
-                            )
-                            sem_rows = [
-                                {k: _safe_value(v) for k, v in r.items() if k != "raw_text"}
-                                for r in _result
-                            ][:limit]
-                    except Exception as exc:
-                        log.warning("semantic_search tool failed | %s", exc)
-                        sem_rows = [{"error": str(exc)}]
-                else:
-                    sem_rows = [{"error": "Vector search unavailable"}]
-
-                yield {
-                    "type": "step",
-                    "description": desc,
-                    "cypher": f"[vector search] {sem_query}",
-                    "count": len(sem_rows) if not (len(sem_rows) == 1 and "error" in sem_rows[0]) else None,
-                }
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": json.dumps(sem_rows),
-                })
-
-            elif block.name == "load_full_text":
-                lft_paper_id: str = block.input.get("paper_id", "")
-                lft_title = lft_paper_id  # fallback label
-
-                if driver and lft_paper_id:
-                    try:
-                        with driver.session() as _sess:
-                            row = _sess.run(
-                                "MATCH (p:Paper {id: $id}) RETURN p.raw_text AS raw_text, p.title AS title",
-                                id=lft_paper_id,
-                            ).single()
-                        if row and row["raw_text"]:
-                            raw = row["raw_text"]
-                            lft_title = row["title"] or lft_paper_id
-                            raw_tokens = estimate_tokens(raw)
-                            budget_tokens = 15_000
-                            if raw_tokens <= budget_tokens:
-                                lft_content = raw
-                                tok_label = f"{raw_tokens:,} tokens"
-                            else:
-                                lft_content = _condense_paper_for_budget(lft_title, raw, budget_tokens)
-                                tok_label = f"condensed to ~{estimate_tokens(lft_content):,} tokens"
-                        else:
-                            lft_content = "[Full text not available for this paper]"
-                            tok_label = "no text stored"
-                    except Exception as exc:
-                        log.warning("load_full_text tool failed | %s", exc)
-                        lft_content = f"[Error loading full text: {exc}]"
-                        tok_label = "error"
-                else:
-                    lft_content = "[Full text unavailable — no database connection]"
-                    tok_label = "unavailable"
-
-                yield {
-                    "type": "step",
-                    "description": f"Loading full text: {lft_title[:60]} ({tok_label})",
-                    "cypher": None,
-                    "count": None,
-                }
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": lft_content,
-                })
+            executed = execute_library_tool(block.name, block.input, driver)
+            if executed is None:
+                continue
+            step, content = executed
+            yield step
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": content,
+            })
 
         if not tool_results:
             # No recognised tools in this response — break to avoid infinite loop
