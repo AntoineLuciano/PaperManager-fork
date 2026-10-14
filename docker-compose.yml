@@ -74,6 +74,9 @@ services:
       - RATE_LIMIT_AUTH_WINDOW_SECONDS=${RATE_LIMIT_AUTH_WINDOW_SECONDS:-60}
       - RATE_LIMIT_EXEMPT_PATHS=${RATE_LIMIT_EXEMPT_PATHS:-/docs,/redoc,/openapi.json}
       - RATE_LIMIT_AUTH_PATHS=${RATE_LIMIT_AUTH_PATHS:-/auth/login,/auth/register,/auth/admin/create-user}
+      # Host directory the MCP upload_pdf tool may read PDFs from, mounted read-only
+      # at the same path so host paths work unchanged inside the container.
+      - HOST_IMPORT_ROOT=${HOST_IMPORT_ROOT:-/home/niklas/code}
     depends_on:
       - neo4j
     networks:
@@ -82,6 +85,7 @@ services:
       - ./backend:/app
       - ./prompts:/prompts
       - backend_data:/data
+      - ${HOST_IMPORT_ROOT:-/home/niklas/code}:${HOST_IMPORT_ROOT:-/home/niklas/code}:ro
 
   frontend:
     build:

@@ -108,8 +108,10 @@ flowchart LR
     Services --> AI["Claude / Ollama"]
 ```
 
-!!! note "PDF upload is browser-only"
-    File upload is intentionally not exposed as an MCP tool — it requires the browser drag-and-drop flow.
+!!! note "PDF upload via MCP"
+    `upload_pdf(source, project)` runs one paper through the full upload pipeline. `source` is a
+    local PDF path, a PDF URL, an arXiv id or a DOI. Local paths must lie under `HOST_IMPORT_ROOT`
+    (default `/home/niklas/code`), which is mounted read-only into the backend container.
 
 ---
 

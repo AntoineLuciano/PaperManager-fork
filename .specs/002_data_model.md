@@ -201,15 +201,16 @@ Extracted table from a PDF.
 ### Notes
 | Rel | Direction |
 |---|---|
-| `ABOUT` | Note → Paper |
+| `HAS_NOTE` | Paper → Note (at most one per paper) |
+| `WROTE` | User → Note |
 | `MENTIONS` | Note → Person (`@PersonName`) |
 | `MENTIONS` | Note → Topic (`#TopicName`) |
 
 ### Projects
 | Rel | Direction |
 |---|---|
-| `CONTAINS` | Project → Paper |
-| `CONTAINS` | Project → BlogPost |
+| `IN_PROJECT` | Paper → Project |
+| `MEMBER_OF` | User → Project |
 | `RELATED_TO` | Project ↔ Project (bidirectional) |
 
 ### Blogs

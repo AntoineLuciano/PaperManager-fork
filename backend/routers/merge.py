@@ -1,36 +1,36 @@
-"""Merge Manager — find near-duplicate papers and merge them.
+"""Merge Manager — find duplicate papers and merge them.
 
-Scan endpoint:   POST /merge/scan?model=ollama|claude
-Execute endpoint: POST /merge/execute
+POST /merge/scan       candidate pairs (keeper vs each duplicate), the shape MergeManager.tsx reads
+GET  /merge/groups     the full duplicate groups, classified, plus suspected wrong DOIs
+POST /merge/execute    merge one or more papers into a keeper (``dry_run`` to preview)
+
+Detection rules: services/duplicate_scan.py. What a merge moves: services/paper_merge.py.
+Detection is deterministic (DOI and title rules), so the former ``model`` parameter of /scan is
+accepted for compatibility and ignored.
 """
 from __future__ import annotations
 
-import difflib
-import json
 import logging
-import re
-from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, model_validator
 
 from db.connection import get_driver
+from services.duplicate_scan import CLASSES, SCAN_QUERY, scan, title_similarity, wrong_doi_suspects
+from services.paper_merge import merge_papers
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/merge", tags=["merge"])
 
-_PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
-_BATCH_SIZE = 30  # max pairs per Ollama/Claude call — keeps context window safe
-
 
 # ── Schemas ────────────────────────────────────────────────────────────────
 
 class DuplicatePair(BaseModel):
-    paper_a: dict
-    paper_b: dict
-    similarity: float   # 0–1
-    reason: str         # human-readable explanation
+    paper_a: dict          # the keeper
+    paper_b: dict          # the duplicate
+    similarity: float      # title similarity 0–1
+    reason: str            # which rule linked them, and the group class
 
 
 class ScanResult(BaseModel):
@@ -40,343 +40,93 @@ class ScanResult(BaseModel):
 
 class MergeExecuteRequest(BaseModel):
     keep_id: str
-    remove_id: str
+    remove_id: str | None = None
+    remove_ids: list[str] | None = None
+    dry_run: bool = False
+    trash_drive_files: bool = True
+
+    @model_validator(mode="after")
+    def _one_target(self):
+        if not self.remove_id and not self.remove_ids:
+            raise ValueError("give remove_id or remove_ids")
+        return self
+
+    @property
+    def targets(self) -> list[str]:
+        return [*(self.remove_ids or []), *([self.remove_id] if self.remove_id else [])]
 
 
 class MergeExecuteResult(BaseModel):
     kept_id: str
-    removed_id: str
+    removed_id: str | None
     relationships_moved: int
+    report: dict
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def _title_similarity(a: str, b: str) -> float:
-    """Normalised SequenceMatcher ratio on lower-cased, whitespace-collapsed titles."""
-    a = " ".join(a.lower().split())
-    b = " ".join(b.lower().split())
-    return difflib.SequenceMatcher(None, a, b).ratio()
-
-
-def _load_prompt_template() -> str:
-    try:
-        return (_PROMPTS_DIR / "merge_scan.txt").read_text(encoding="utf-8")
-    except FileNotFoundError:
-        # Inline fallback so the router never hard-fails
-        return (
-            "You are a research librarian checking for duplicate paper entries.\n"
-            "Below are {n_pairs} pairs of paper titles with high string similarity.\n"
-            "For each pair decide if they refer to the same paper.\n"
-            "Return ONLY a JSON array: "
-            '[{{"idx": <index>, "same": true|false, "reason": "<one sentence>"}}]\n\n'
-            "Pairs:\n{pairs_block}"
-        )
-
-
-def _build_pairs_block(batch: list[tuple[dict, dict, float]]) -> str:
-    lines = []
-    for i, (a, b, _) in enumerate(batch):
-        lines.append(f'{i}: A: "{a.get("title", "")}" | B: "{b.get("title", "")}"')
-    return "\n".join(lines)
-
-
-def _parse_batch_response(raw: str, batch: list[tuple[dict, dict, float]]) -> list[DuplicatePair]:
-    """Parse a JSON array response from the model and return confirmed duplicate pairs."""
-    results: list[DuplicatePair] = []
-    try:
-        m = re.search(r"\[.*\]", raw, re.DOTALL)
-        items = json.loads(m.group()) if m else []
-    except Exception:
-        items = []
-
-    for item in items:
-        idx = item.get("idx")
-        if idx is None or not isinstance(idx, int) or idx >= len(batch):
-            continue
-        if not item.get("same", False):
-            continue
-        a, b, sim = batch[idx]
-        results.append(DuplicatePair(
-            paper_a=_slim(a), paper_b=_slim(b),
-            similarity=round(sim, 3),
-            reason=str(item.get("reason", f"Title similarity {sim:.0%}")),
-        ))
-    return results
-
-
-def _verify_with_litellm(pairs: list[tuple[dict, dict, float]], model: str) -> list[DuplicatePair]:
-    """Batch-verify candidate pairs with LiteLLM (chunked to _BATCH_SIZE)."""
-    from services.litellm_client import chat_completion, resolve_chat_model
-
-    template = _load_prompt_template()
-    results: list[DuplicatePair] = []
-    resolved = resolve_chat_model(model)
-
-    for chunk_start in range(0, len(pairs), _BATCH_SIZE):
-        batch = pairs[chunk_start: chunk_start + _BATCH_SIZE]
-        prompt = template.format(
-            n_pairs=len(batch),
-            pairs_block=_build_pairs_block(batch),
-        )
-        try:
-            raw = chat_completion(
-                messages=[{"role": "user", "content": prompt}],
-                model=resolved,
-            )
-            results.extend(_parse_batch_response(raw, batch))
-            log.info("Merge scan batch %d–%d: LiteLLM verified", chunk_start, chunk_start + len(batch) - 1)
-        except Exception as exc:
-            log.warning("LiteLLM batch verification failed (chunk %d): %s — falling back to similarity", chunk_start, exc)
-            results.extend(_no_ai_pairs(batch))
-
-    return results
-
-
-def _verify_with_claude(pairs: list[tuple[dict, dict, float]]) -> list[DuplicatePair]:
-    """Batch-verify candidate pairs with Claude Haiku (chunked to _BATCH_SIZE)."""
-    import anthropic
-    from config import settings as cfg
-    from services.user_ai_config import get_effective_ai_config
-
-    try:
-        ai_cfg = get_effective_ai_config()
-        personal_key = (ai_cfg.get("anthropic_api_key") or "").strip()
-        if not personal_key:
-            return _verify_with_litellm(pairs, cfg.litellm_model)
-        client = anthropic.Anthropic(api_key=personal_key)
-    except Exception:
-        return _verify_with_litellm(pairs, cfg.litellm_model)
-
-    template = _load_prompt_template()
-    results: list[DuplicatePair] = []
-
-    for chunk_start in range(0, len(pairs), _BATCH_SIZE):
-        batch = pairs[chunk_start: chunk_start + _BATCH_SIZE]
-        prompt = template.format(
-            n_pairs=len(batch),
-            pairs_block=_build_pairs_block(batch),
-        )
-        try:
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=_BATCH_SIZE * 40,   # ~40 tokens per item
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = msg.content[0].text.strip()
-            results.extend(_parse_batch_response(raw, batch))
-            log.info("Merge scan batch %d–%d: Claude verified", chunk_start, chunk_start + len(batch) - 1)
-        except Exception as exc:
-            log.warning("Claude batch verification failed (chunk %d): %s — falling back to similarity", chunk_start, exc)
-            results.extend(_no_ai_pairs(batch))
-
-    return results
-
-
-def _no_ai_pairs(pairs: list[tuple[dict, dict, float]]) -> list[DuplicatePair]:
-    """Return all candidates as confirmed (no AI check — similarity only)."""
-    return [
-        DuplicatePair(
-            paper_a=_slim(a), paper_b=_slim(b),
-            similarity=round(sim, 3),
-            reason=f"Title similarity {sim:.0%}",
-        )
-        for a, b, sim in pairs
-    ]
-
-
 def _slim(p: dict) -> dict:
-    """Return a small subset of paper fields safe to send to the frontend."""
-    return {
-        "id": p.get("id"),
-        "title": p.get("title"),
-        "year": p.get("year"),
-        "doi": p.get("doi"),
-        "abstract": (p.get("abstract") or "")[:300],
-        "metadata_source": p.get("metadata_source"),
-        "drive_file_id": p.get("drive_file_id"),
-    }
+    """The fields the frontend shows, plus what decides which one is kept."""
+    keys = ("id", "title", "year", "doi", "drive_file_id", "text_chars", "notes", "annotations",
+            "projects", "cited_by", "cites")
+    return {k: p.get(k) for k in keys}
+
+
+def load_papers() -> list[dict]:
+    with get_driver().session() as session:
+        return session.run(SCAN_QUERY).data()
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
 
 @router.post("/scan", response_model=ScanResult)
-def scan_duplicates(model: str = "litellm"):
-    """
-    Compare all paper titles and return candidate duplicate pairs.
-
-    model: "litellm" (default) | "ollama" (alias) | "claude" | "none" (raw similarity only)
-    """
-    from config import settings as cfg
-
-    driver = get_driver()
-    with driver.session() as session:
-        result = session.run(
-            "MATCH (p:Paper) RETURN p.id AS id, p.title AS title, "
-            "p.year AS year, p.doi AS doi, p.abstract AS abstract, "
-            "p.metadata_source AS metadata_source, p.drive_file_id AS drive_file_id"
+def scan_duplicates(model: str = "none"):
+    """Candidate duplicate pairs: each group's keeper against each of its duplicates."""
+    result = scan(load_papers())
+    pairs = [
+        DuplicatePair(
+            paper_a=_slim(g.keep), paper_b=_slim(p),
+            similarity=round(title_similarity(g.keep["title"], p["title"]), 3),
+            reason=f"{', '.join(g.reasons)} · {g.klass.replace('_', ' ')}",
         )
-        papers = [dict(r) for r in result]
+        for g in result.groups for p in g.remove
+    ]
+    log.info("Merge scan: %d papers, %d groups, %d pairs", result.total, len(result.groups), len(pairs))
+    return ScanResult(pairs=pairs, total_papers=result.total)
 
-    papers = [p for p in papers if p.get("title") and p["title"].strip()]
-    total = len(papers)
-    log.info("Merge scan: %d papers", total)
 
-    # O(n²) similarity check — fine for typical library sizes (< 5 000 papers)
-    THRESHOLD = 0.82
-    candidates: list[tuple[dict, dict, float]] = []
-    seen: set[frozenset] = set()
-
-    for i in range(len(papers)):
-        for j in range(i + 1, len(papers)):
-            a, b = papers[i], papers[j]
-            key = frozenset([a["id"], b["id"]])
-            if key in seen:
-                continue
-            sim = _title_similarity(a["title"], b["title"])
-            if sim >= THRESHOLD:
-                seen.add(key)
-                candidates.append((a, b, sim))
-
-    # Sort by descending similarity
-    candidates.sort(key=lambda x: x[2], reverse=True)
-    log.info("Merge scan: %d candidate pairs (threshold=%.0f%%)", len(candidates), THRESHOLD * 100)
-
-    # AI verification
-    if not candidates:
-        return ScanResult(pairs=[], total_papers=total)
-
-    if model in ("litellm", "ollama"):
-        pairs = _verify_with_litellm(candidates, cfg.litellm_model)
-    elif model == "claude":
-        pairs = _verify_with_claude(candidates)
-    else:
-        pairs = _no_ai_pairs(candidates)
-
-    return ScanResult(pairs=pairs, total_papers=total)
+@router.get("/groups")
+def duplicate_groups(classes: str | None = Query(None, description=f"comma-separated subset of {CLASSES}")):
+    wanted = set((classes or ",".join(CLASSES)).split(","))
+    unknown = wanted - set(CLASSES)
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"unknown classes: {sorted(unknown)}")
+    result = scan(load_papers())
+    return {
+        "total_papers": result.total,
+        "groups": [
+            {"class": g.klass, "reasons": g.reasons, "keep": _slim(g.keep), "remove": [_slim(p) for p in g.remove]}
+            for g in result.groups if g.klass in wanted
+        ],
+        "wrong_doi_suspects": [
+            {"paper": _slim(s), "doi_belongs_to": _slim(o)} for s, o in wrong_doi_suspects(result)
+        ],
+    }
 
 
 @router.post("/execute", response_model=MergeExecuteResult)
 def execute_merge(body: MergeExecuteRequest):
-    """
-    Merge two papers: move all relationships from remove_id → keep_id, then delete remove_id.
-
-    Moves:
-      - AUTHORED_BY (paper→person)
-      - TAGGED (paper→tag)
-      - ABOUT (paper→topic)
-      - Project CONTAINS (project→paper)
-      - CITES outgoing (paper→paper)
-      - CITES incoming (paper→paper)
-      - Note ABOUT (note→paper)
-      - INVOLVES (person→paper)
-    """
-    driver = get_driver()
-
-    keep_id = body.keep_id
-    remove_id = body.remove_id
-
-    if keep_id == remove_id:
+    """Merge ``remove_id``/``remove_ids`` into ``keep_id``. Nothing is lost; see paper_merge.py."""
+    if body.keep_id in body.targets:
         raise HTTPException(status_code=400, detail="keep_id and remove_id must differ")
-
-    with driver.session() as session:
-        # Verify both exist
-        k = session.run("MATCH (p:Paper {id: $id}) RETURN p.id", id=keep_id).single()
-        r = session.run("MATCH (p:Paper {id: $id}) RETURN p.id", id=remove_id).single()
-        if not k:
-            raise HTTPException(status_code=404, detail=f"Paper to keep not found: {keep_id}")
-        if not r:
-            raise HTTPException(status_code=404, detail=f"Paper to remove not found: {remove_id}")
-
-        moved = 0
-
-        # AUTHORED_BY: (remove)-[:AUTHORED_BY]->(person)  →  (keep)-[:AUTHORED_BY]->(person)
-        res = session.run("""
-            MATCH (remove:Paper {id: $rid})-[rel:AUTHORED_BY]->(person:Person)
-            MATCH (keep:Paper {id: $kid})
-            MERGE (keep)-[:AUTHORED_BY]->(person)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        # TAGGED: (remove)-[:TAGGED]->(tag)
-        res = session.run("""
-            MATCH (remove:Paper {id: $rid})-[rel:TAGGED]->(tag:Tag)
-            MATCH (keep:Paper {id: $kid})
-            MERGE (keep)-[:TAGGED]->(tag)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        # ABOUT (topic): (remove)-[:ABOUT]->(topic)
-        res = session.run("""
-            MATCH (remove:Paper {id: $rid})-[rel:ABOUT]->(topic:Topic)
-            MATCH (keep:Paper {id: $kid})
-            MERGE (keep)-[:ABOUT]->(topic)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        # Project CONTAINS: (project)-[:CONTAINS]->(remove)
-        res = session.run("""
-            MATCH (project:Project)-[rel:CONTAINS]->(remove:Paper {id: $rid})
-            MATCH (keep:Paper {id: $kid})
-            MERGE (project)-[:CONTAINS]->(keep)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        # CITES outgoing: (remove)-[:CITES]->(cited)
-        res = session.run("""
-            MATCH (remove:Paper {id: $rid})-[rel:CITES]->(cited:Paper)
-            WHERE cited.id <> $kid
-            MATCH (keep:Paper {id: $kid})
-            MERGE (keep)-[:CITES]->(cited)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        # CITES incoming: (citer)-[:CITES]->(remove)
-        res = session.run("""
-            MATCH (citer:Paper)-[rel:CITES]->(remove:Paper {id: $rid})
-            WHERE citer.id <> $kid
-            MATCH (keep:Paper {id: $kid})
-            MERGE (citer)-[:CITES]->(keep)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        # Note ABOUT: (note)-[:ABOUT]->(remove)
-        res = session.run("""
-            MATCH (note:Note)-[rel:ABOUT]->(remove:Paper {id: $rid})
-            MATCH (keep:Paper {id: $kid})
-            MERGE (note)-[:ABOUT]->(keep)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        # INVOLVES: (person)-[:INVOLVES]->(remove)
-        res = session.run("""
-            MATCH (person:Person)-[rel:INVOLVES]->(remove:Paper {id: $rid})
-            MATCH (keep:Paper {id: $kid})
-            MERGE (person)-[:INVOLVES]->(keep)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        # Delete the removed paper node (and any remaining direct rels)
-        session.run("""
-            MATCH (p:Paper {id: $rid})
-            DETACH DELETE p
-        """, rid=remove_id)
-
-        log.info("Merge done | kept=%s removed=%s moved=%d rels", keep_id, remove_id, moved)
-
-    return MergeExecuteResult(kept_id=keep_id, removed_id=remove_id, relationships_moved=moved)
+    try:
+        report = merge_papers(get_driver(), body.keep_id, body.targets,
+                              dry_run=body.dry_run, trash_drive_files=body.trash_drive_files)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return MergeExecuteResult(
+        kept_id=body.keep_id,
+        removed_id=body.remove_id or (body.targets[0] if len(body.targets) == 1 else None),
+        relationships_moved=report.relationships_moved,
+        report=report.as_dict(),
+    )

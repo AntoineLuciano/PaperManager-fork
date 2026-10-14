@@ -95,6 +95,11 @@ A paper note is the user's own text followed by chat answers the frontend saved 
 
 ## Architecture Note
 
-PDF upload is intentionally **not** exposed as an MCP tool — file upload must go through the browser frontend. All read and metadata operations are available via MCP.
+`tools/upload_tools.py` exposes `upload_pdf(source, project="")`: one paper with its PDF through
+`POST /papers/upload`, the same pipeline as a drag-and-drop upload (no upload-queue precompute, so
+a call takes a few minutes). `source` is a local PDF path, a PDF URL, an arXiv id or a DOI; the
+logic is `services/pdf_import.py`, shared with `scripts/import_to_project.py`. The MCP server runs
+inside the backend container (`docker exec`), so local paths must lie under `HOST_IMPORT_ROOT`
+(default `/home/niklas/code`), which `docker-compose.yml` bind-mounts read-only at the same path.
 
 The MCP server uses **FastMCP**. Tool handlers are thin wrappers that call `db/queries/` functions directly — the same functions used by FastAPI routers.

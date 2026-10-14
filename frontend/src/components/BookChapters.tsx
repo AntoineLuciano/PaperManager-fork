@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import { mdPlugins } from "../lib/markdown";
 import { listChapters, detectChapters, regenerateChapterSummary, chatWithChapter, getChapterPdfUrl, getPaperPdfUrl } from "../api/client";
 import { useAppSettings } from "../contexts/SettingsContext";
 import type { Chapter } from "../types";
@@ -277,7 +278,7 @@ export default function BookChapters({ paperId }: Props) {
                         </button>
                       </div>
                       <div className="prose prose-sm max-w-none text-gray-700 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-xs [&_h3]:font-semibold [&_p]:my-1 [&_li]:my-0.5">
-                        <ReactMarkdown>{ch.summary}</ReactMarkdown>
+                        <ReactMarkdown {...mdPlugins}>{ch.summary}</ReactMarkdown>
                       </div>
                     </div>
                   ) : (
@@ -318,7 +319,7 @@ export default function BookChapters({ paperId }: Props) {
                             <div className={`inline-block rounded-lg px-2.5 py-1.5 text-xs max-w-[90%] ${msg.role === "user" ? "bg-violet-600 text-white" : "bg-white text-gray-800 border border-gray-200"}`}>
                               {msg.role === "assistant" ? (
                                 <div className="prose prose-sm max-w-none text-gray-800 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-xs [&_h3]:font-semibold [&_p]:my-1 [&_li]:my-0.5">
-                                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                  <ReactMarkdown {...mdPlugins}>{msg.content}</ReactMarkdown>
                                 </div>
                               ) : msg.content}
                             </div>

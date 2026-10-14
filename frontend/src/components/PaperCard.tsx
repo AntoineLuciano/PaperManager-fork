@@ -1,3 +1,5 @@
+import ReactMarkdown from "react-markdown";
+import { inlineMd } from "../lib/markdown";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { deletePaper, apiFetch } from "../api/client";
@@ -39,7 +41,8 @@ export default function PaperCard({ paper: initial, showAbstract = true, onDelet
   const [confirmDel, setConfirmDel] = useState(false);
 
   const currentStatus = paper.reading_status ?? "unread";
-  const summaryPreview = paper.summary?.split("\n").slice(0, 2).join(" ") ?? "";
+  // First prose lines of the summary, without the "## Contribution" style headings
+  const summaryPreview = (paper.summary ?? "").split("\n").filter((l) => l.trim() && !l.startsWith("#")).slice(0, 2).join(" ");
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -180,7 +183,7 @@ export default function PaperCard({ paper: initial, showAbstract = true, onDelet
         )}
 
         {showAbstract && summaryPreview && (
-          <p className="text-xs text-gray-500 line-clamp-2 mt-1">{summaryPreview}</p>
+          <p className="text-xs text-gray-500 line-clamp-2 mt-1"><ReactMarkdown {...inlineMd}>{summaryPreview}</ReactMarkdown></p>
         )}
 
         <div className="mt-3 flex flex-wrap gap-1 items-center">

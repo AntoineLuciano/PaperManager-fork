@@ -195,3 +195,32 @@ All reference stubs are auto-tagged `from-references`.
 On a Person's detail page, toggle **Track author**. The backend periodically queries Semantic Scholar for new papers by that author (using `s2_author_id`) and auto-imports them.
 
 Endpoint: `POST /people/{id}/track`
+
+---
+
+## Duplicates and merging
+
+Uploads absorb matching citation stubs (`merge_reference_stubs_into_paper`, now matching every
+spelling of a DOI: `arXiv:ID`, bare `ID`, `10.48550/arXiv.ID`). Everything else goes through
+`backend/scripts/merge_duplicates.py`, run inside the backend container:
+
+```bash
+docker exec -w /app papermanager-backend-1 python scripts/merge_duplicates.py scan [--show CLASSES] [--json F]
+docker exec -w /app papermanager-backend-1 python scripts/merge_duplicates.py fix-dois --verify-arxiv [--apply]
+docker exec -w /app papermanager-backend-1 python scripts/merge_duplicates.py merge --classes CLASSES [--apply]
+docker exec -w /app papermanager-backend-1 python scripts/merge_duplicates.py repair --backup B --log L [--apply]
+```
+
+- **Detection** (`services/duplicate_scan.py`): normalised DOI with agreeing titles; identical
+  titles (≥ 4 words, not generic, not author lists); near-identical titles (≥ 0.97 without
+  spaces, same Arabic/Roman numerals); a truncated title only when the short one is an upload's.
+  Title links need compatible DOIs (missing, equal, or preprint next to journal).
+- **Wrong DOIs**: metadata extraction sometimes takes a DOI from the paper's own reference list.
+  `fix-dois` finds uploads sharing a DOI with a differently titled stub and, with
+  `--verify-arxiv`, uploads whose arXiv id resolves to another title; it looks up the right
+  identifier (Semantic Scholar, then arXiv) or clears the field.
+- **Merge** (`services/paper_merge.py`): one transaction per group; a dry run executes and rolls
+  back. Every relationship of the duplicate is moved by type, missing properties are filled,
+  notes are concatenated, PDF-derived children are kept once, the duplicate PDF goes to the Drive
+  trash. `--apply` writes `scripts/merge_logs/merge_backup_<time>.json` first and verifies every
+  neighbour afterwards; `repair` reconciles keepers with a backup.

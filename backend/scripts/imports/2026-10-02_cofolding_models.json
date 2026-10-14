@@ -1,0 +1,12 @@
+{
+  "project": "MasterThesis",
+  "papers": [
+    {"biorxiv": "10.1101/2025.06.14.659707", "pdf_path": "/app/scripts/imports/pdfs_2026-10-02/boltz2_passaro2025.pdf", "note": "Boltz-2, base model"},
+    {"biorxiv": "10.1101/2024.11.19.624167", "pdf_path": "/app/scripts/imports/pdfs_2026-10-02/boltz1_wohlwend2024.pdf", "note": "Boltz-1, architecture Boltz-2 inherits"},
+    {"pdf_path": "/app/scripts/imports/pdfs_2026-10-02/openfold3_preview2_techreport2025.pdf", "note": "OpenFold3 preview-2 technical report"},
+    {"biorxiv": "10.1101/2025.01.08.631967", "pdf_path": "/app/scripts/imports/pdfs_2026-10-02/protenix_techreport2024.pdf", "note": "Protenix 2024, AF3 reproduction"},
+    {"biorxiv": "10.64898/2026.02.05.703733", "pdf_path": "/app/scripts/imports/pdfs_2026-10-02/protenix_v1_techreport2026.pdf", "note": "Protenix-v1, open base model"},
+    {"biorxiv": "10.64898/2026.04.10.717613", "pdf_path": "/app/scripts/imports/pdfs_2026-10-02/protenix_v2_techreport2026.pdf", "note": "Protenix-v2, proprietary weights"},
+    {"biorxiv": "10.64898/2026.06.03.729735", "pdf_path": "/app/scripts/imports/pdfs_2026-10-02/esmfold2_candido2026_world_model.pdf", "note": "ESMC and ESMFold2"}
+  ]
+}

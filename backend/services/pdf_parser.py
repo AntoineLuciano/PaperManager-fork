@@ -40,16 +40,32 @@ def extract_text(pdf_bytes: bytes, max_pages: int | None = None) -> str:
 # ── DOI / arXiv ID detection ─────────────────────────────────────────────────
 
 _SUPPLEMENTAL_RE = re.compile(r"[/-]+(DCSupplemental|supplementary|supp|SI|S\d+).*$", re.IGNORECASE)
+# pypdf glues the next token onto a DOI when a running header is laid out out of
+# order, e.g. bioRxiv's "https://doi.org/10.1101/2025.02.03.636309doi: bioRxiv".
+_GLUED_TAIL_RE = re.compile(r"(doi:?|https?:.*)$", re.IGNORECASE)
+_REFERENCES_RE = re.compile(r"\n\s*(?:\d+\.?\s*)?(?:references|bibliography|literature cited)\s*\n", re.IGNORECASE)
+# Only the front matter identifies the paper itself; further in, every arXiv id
+# or DOI belongs to a cited work (a reference's arXiv id once made an upload
+# match a different paper in the library as a "duplicate").
+_FRONT_MATTER_CHARS = 8000
+
 
 def _clean_doi(raw: str) -> str | None:
-    """Strip trailing punctuation, supplemental suffixes; reject truncated DOIs."""
-    raw = raw.rstrip(".,;)")
+    """Strip trailing punctuation, glued tokens, supplemental suffixes; reject truncated DOIs."""
+    raw = _GLUED_TAIL_RE.sub("", raw.rstrip(".,;)")).rstrip(".,;)")
     raw = _SUPPLEMENTAL_RE.sub("", raw)
     suffix = raw.split("/", 1)[1] if "/" in raw else ""
     return raw if len(suffix) >= 4 else None
 
 
+def _front_matter(text: str) -> str:
+    refs = _REFERENCES_RE.search(text)
+    return (text[:refs.start()] if refs else text)[:_FRONT_MATTER_CHARS]
+
+
 def find_doi(text: str) -> str | None:
+    """The paper's own arXiv id or DOI, searched in its front matter only."""
+    text = _front_matter(text)
     arxiv = ARXIV_RE.search(text)
     if arxiv:
         return f"arXiv:{arxiv.group(1)}"

@@ -62,7 +62,7 @@ This means every capability is available both via HTTP (browser) and via MCP too
 | `synthesis.py` | `/synthesis` | Cross-paper synthesis (Claude Opus) |
 | `research_gaps.py` | `/research-gaps` | Research gap analysis (Claude Opus) |
 | `author_tracker.py` | `/people/{id}/track` | Author auto-import tracking |
-| `merge.py` | `/merge` | Duplicate detection + paper merge |
+| `merge.py` | `/merge` | Duplicate detection + paper merge (services/duplicate_scan.py, services/paper_merge.py, scripts/merge_duplicates.py) |
 | `auth.py` | `/auth` | Login, JWT, user management |
 | `users.py` | `/users` | User identity + per-user conversation history |
 | `admin.py` | `/admin` | Maintenance + admin endpoints |

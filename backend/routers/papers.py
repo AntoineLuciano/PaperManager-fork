@@ -1004,10 +1004,13 @@ def delete(paper_id: str):
         delete_figures_for_paper(driver, paper_id)
         log.info("Figures deleted | count=%d | paper_id=%s", len(figs), paper_id)
 
-    # Delete the note attached to this paper
+    # Delete the note and the other nodes that only exist for this paper
     with driver.session() as session:
         session.run(
-            "MATCH (n:Note)-[:ABOUT]->(p:Paper {id: $id}) DETACH DELETE n",
+            """
+            MATCH (p:Paper {id: $id})-[:HAS_NOTE|HAS_CLAIM|HAS_TABLE|HAS_CHAPTER|HAS_ANNOTATION]->(c)
+            DETACH DELETE c
+            """,
             id=paper_id,
         )
 

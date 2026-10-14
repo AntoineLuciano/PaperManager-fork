@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
+import { mdPlugins } from "../lib/markdown";
 import type { Note } from "../types";
 
 interface Props {
@@ -124,7 +125,7 @@ export default function NoteEditor({ fetchNote, saveNote, compact }: Props) {
   const previewPane = (
     <div className="flex-1 overflow-y-auto p-3 prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-800 prose-blockquote:border-violet-400 prose-blockquote:text-gray-500 prose-code:text-violet-700 prose-a:text-violet-600 border-l border-gray-100">
       {content.trim() ? (
-        <ReactMarkdown>{content}</ReactMarkdown>
+        <ReactMarkdown {...mdPlugins}>{content}</ReactMarkdown>
       ) : (
         <p className="text-gray-300 italic text-sm">Markdown preview will appear here.</p>
       )}

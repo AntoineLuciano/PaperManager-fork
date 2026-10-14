@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { findResearchGaps } from "../api/client";
 import ReactMarkdown from "react-markdown";
+import { mdPlugins } from "../lib/markdown";
 
 type Model = "claude" | "claude-work" | "litellm";
 
@@ -184,7 +185,7 @@ export default function ResearchGapPanel({ onClose, projectId, paperIds }: Props
               </div>
 
               <div className="prose prose-sm max-w-none">
-                <ReactMarkdown>{analysis}</ReactMarkdown>
+                <ReactMarkdown {...mdPlugins}>{analysis}</ReactMarkdown>
               </div>
             </div>
           )}

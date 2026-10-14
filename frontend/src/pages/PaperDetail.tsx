@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { mdPlugins, inlineMd } from "../lib/markdown";
 import { apiFetch, extractReferences, aiExtractReferences, saveReferences, listReferences, ingestFromUrl, previewUrl, suggestTags, applyTags, createStandaloneTag, suggestTopics, fetchFigures, fetchTables, extractFiguresForPaper, chatWithFigure, deletePaper, removeAuthor, addAuthorByName, aiExtractAuthors, fetchGraph, fetchPaperInvolves, regenerateSummary, updatePaper, refetchPdf, reextractAbstract, aiExtractMetadata, parsePdf, fetchPaperProjects, listProjects, addPaperToProject, removePaperFromProject, getPaperClaims, extractPaperClaims, getRelatedPapers, discoverAdd, listAnnotations, exportPaperMarkdown, getOrCreatePerson, linkPersonInvolves } from "../api/client";
 import NoteEditor from "../components/NoteEditor";
 import ChatPanel from "../components/ChatPanel";
@@ -1182,7 +1182,7 @@ export default function PaperDetail() {
                 </div>
                 {paper.summary ? (
                   <div className="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-800 prose-a:text-violet-600">
-                    <ReactMarkdown>{paper.summary}</ReactMarkdown>
+                    <ReactMarkdown {...mdPlugins}>{paper.summary}</ReactMarkdown>
                   </div>
                 ) : (
                   <p className="text-sm text-gray-400 italic">
@@ -2302,7 +2302,7 @@ export default function PaperDetail() {
                               </div>
                               {figureAnswer && (
                                 <div className="prose prose-sm max-w-none bg-white border border-gray-100 rounded-xl p-4">
-                                  <ReactMarkdown>{figureAnswer}</ReactMarkdown>
+                                  <ReactMarkdown {...mdPlugins}>{figureAnswer}</ReactMarkdown>
                                 </div>
                               )}
                             </div>
@@ -2354,7 +2354,7 @@ export default function PaperDetail() {
                     {/* Markdown table rendered */}
                     <div className="overflow-x-auto px-4 py-3">
                       <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
+                        {...mdPlugins}
                         components={{
                           table: ({ children }) => (
                             <table className="w-full text-xs border-collapse">{children}</table>
@@ -2441,7 +2441,7 @@ export default function PaperDetail() {
                             {typeClaims.map((claim) => (
                               <div key={claim.id} className="flex items-start gap-2 text-sm text-gray-700 leading-relaxed">
                                 <span className="text-violet-600 mt-0.5">•</span>
-                                <p>{claim.text}</p>
+                                <p><ReactMarkdown {...inlineMd}>{claim.text}</ReactMarkdown></p>
                               </div>
                             ))}
                           </div>

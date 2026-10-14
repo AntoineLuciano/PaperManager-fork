@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
-import "katex/dist/katex.min.css";
+import { mdPlugins } from "../lib/markdown";
 import {
   listPaperConversations, getPaperConversationMessages,
   renamePaperConversation, compactPaperConversation,
@@ -15,10 +12,6 @@ import { CHAT_MODEL_LABELS, useChatModels, type ChatModel } from "../lib/chatMod
 type Model = ChatModel;
 const MODEL_LABELS = CHAT_MODEL_LABELS;
 
-const mdPlugins = {
-  remarkPlugins: [remarkGfm, remarkMath],
-  rehypePlugins: [rehypeKatex],
-} as const;
 
 interface Props {
   paperId: string;

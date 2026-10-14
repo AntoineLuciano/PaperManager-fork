@@ -59,6 +59,24 @@ def test_find_doi_prefers_arxiv_over_doi():
     assert doi.startswith("arXiv:")
 
 
+def test_find_doi_ignores_identifiers_in_references():
+    """A cited arXiv id must not become the paper's own identifier."""
+    text = ("Have cofolding methods moved beyond memorisation?\n"
+            "https://doi.org/10.1101/2025.02.03.636309doi: bioRxiv preprint\n"
+            "1 Introduction\nBody text.\nReferences\n"
+            "[1] NeuralPLexer3. arXiv:2412.10743 (2024)\n")
+    assert find_doi(text) == "10.1101/2025.02.03.636309"
+
+
+def test_find_doi_ignores_identifiers_past_front_matter():
+    text = "Title\n" + "body " * 3000 + "see arXiv:2412.10743"
+    assert find_doi(text) is None
+
+
+def test_find_doi_strips_glued_doi_token():
+    assert find_doi("https://doi.org/10.1101/2025.02.03.636309doi: bioRxiv") == "10.1101/2025.02.03.636309"
+
+
 def test_find_doi_returns_none_when_absent():
     assert find_doi("No identifier here.") is None
 

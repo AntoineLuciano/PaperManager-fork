@@ -221,3 +221,4 @@ logs/
 # Local assistant notes and macOS metadata
 memory/
 .DS_Store
+backend/scripts/merge_logs/

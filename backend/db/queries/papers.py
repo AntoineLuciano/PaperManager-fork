@@ -3,6 +3,8 @@ import uuid
 from datetime import datetime, timezone
 from neo4j import Driver
 
+from services.duplicate_scan import doi_variants
+
 
 def _normalize_title(title: str) -> str:
     """Lowercase, strip punctuation, collapse whitespace for fuzzy title matching."""
@@ -31,7 +33,9 @@ def find_duplicate(
     if doi:
         with driver.session() as session:
             rec = session.run(
-                "MATCH (p:Paper {doi: $doi}) RETURN p LIMIT 1", doi=doi
+                "MATCH (p:Paper) WHERE p.doi IN $dois "
+                "RETURN p ORDER BY p.drive_file_id IS NULL LIMIT 1",
+                dois=doi_variants(doi),
             ).single()
             if rec:
                 return dict(rec["p"])
@@ -68,97 +72,15 @@ def find_duplicate(
 
 
 def _merge_paper_into_keep(driver: Driver, keep_id: str, remove_id: str) -> int:
+    """Merge one paper into another; see services/paper_merge.py for what moves."""
     if keep_id == remove_id:
         return 0
-
-    with driver.session() as session:
-        k = session.run("MATCH (p:Paper {id: $id}) RETURN p.id", id=keep_id).single()
-        r = session.run("MATCH (p:Paper {id: $id}) RETURN p.id", id=remove_id).single()
-        if not k or not r:
-            return 0
-
-        moved = 0
-
-        res = session.run("""
-            MATCH (remove:Paper {id: $rid})-[rel:AUTHORED_BY]->(person:Person)
-            MATCH (keep:Paper {id: $kid})
-            MERGE (keep)-[:AUTHORED_BY]->(person)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        res = session.run("""
-            MATCH (remove:Paper {id: $rid})-[rel:TAGGED]->(tag:Tag)
-            MATCH (keep:Paper {id: $kid})
-            MERGE (keep)-[:TAGGED]->(tag)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        res = session.run("""
-            MATCH (remove:Paper {id: $rid})-[rel:ABOUT]->(topic:Topic)
-            MATCH (keep:Paper {id: $kid})
-            MERGE (keep)-[:ABOUT]->(topic)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        res = session.run("""
-            MATCH (project:Project)-[rel:CONTAINS]->(remove:Paper {id: $rid})
-            MATCH (keep:Paper {id: $kid})
-            MERGE (project)-[:CONTAINS]->(keep)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        res = session.run("""
-            MATCH (remove:Paper {id: $rid})-[rel:CITES]->(cited:Paper)
-            WHERE cited.id <> $kid
-            MATCH (keep:Paper {id: $kid})
-            MERGE (keep)-[:CITES]->(cited)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        res = session.run("""
-            MATCH (citer:Paper)-[rel:CITES]->(remove:Paper {id: $rid})
-            WHERE citer.id <> $kid
-            MATCH (keep:Paper {id: $kid})
-            MERGE (citer)-[:CITES]->(keep)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        res = session.run("""
-            MATCH (note:Note)-[rel:ABOUT]->(remove:Paper {id: $rid})
-            MATCH (keep:Paper {id: $kid})
-            MERGE (note)-[:ABOUT]->(keep)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        res = session.run("""
-            MATCH (person:Person)-[rel:INVOLVES]->(remove:Paper {id: $rid})
-            MATCH (keep:Paper {id: $kid})
-            MERGE (person)-[:INVOLVES]->(keep)
-            DELETE rel
-            RETURN count(rel) AS n
-        """, rid=remove_id, kid=keep_id)
-        moved += res.single()["n"]
-
-        session.run("""
-            MATCH (p:Paper {id: $rid})
-            DETACH DELETE p
-        """, rid=remove_id)
-
-    return moved
+    from services.paper_merge import merge_papers
+    try:
+        report = merge_papers(driver, keep_id, [remove_id], dry_run=False)
+    except LookupError:
+        return 0
+    return report.relationships_moved
 
 
 def merge_reference_stubs_into_paper(
@@ -177,12 +99,12 @@ def merge_reference_stubs_into_paper(
         with driver.session() as session:
             rows = session.run(
                 """
-                MATCH (p:Paper {doi: $doi})
-                WHERE p.id <> $keep_id
+                MATCH (p:Paper)
+                WHERE p.doi IN $dois AND p.id <> $keep_id
                   AND (p.drive_file_id IS NULL OR p.drive_file_id = '')
                 RETURN p.id AS id
                 """,
-                doi=doi,
+                dois=doi_variants(doi),
                 keep_id=keep_id,
             )
             for r in rows:
@@ -200,8 +122,6 @@ def merge_reference_stubs_into_paper(
                     WHERE p.id <> $keep_id
                       AND (p.drive_file_id IS NULL OR p.drive_file_id = '')
                     RETURN p.id AS id, p.title AS title
-                    ORDER BY p.created_at DESC
-                    LIMIT 2000
                     """,
                     keep_id=keep_id,
                 )

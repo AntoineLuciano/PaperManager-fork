@@ -1,0 +1,15 @@
+{
+ "project": "MasterThesis",
+ "description": "12 Oct 2026: antibody two-state data for RQ4 (thesis desk, week 01 note 030). Guest 2021 has no open PDF (Structure; PMC author manuscript behind a bot check): metadata only, PDF to be added by hand.",
+ "papers": [
+  {"doi": "10.1080/19420862.2024.2322533",
+   "pdf_url": "https://discovery.ucl.ac.uk/id/eprint/10187578/7/Martin_Do%20antibody%20CDR%20loops%20change%20conformation%20upon%20binding%20.pdf",
+   "note": "AbAgDb (Liu, Denzler, Hood, Martin 2024, mAbs): 177 antibodies with bound + unbound crystals; apo/holo CDR-H3 tier"},
+  {"biorxiv": "10.1101/2025.03.19.644119",
+   "note": "ITsFlexible / ALL-conformations (Spoendlin, Fernandez-Quintero, Raghavan, Deane); published Nat. Mach. Intell. 2025, 10.1038/s42256-025-01131-6"},
+  {"biorxiv": "10.1101/2025.11.10.687725",
+   "note": "FlAbDab / FTCRDab (Cagiada, Spoendlin, ..., Deane): CG MD ensembles of >150k antibodies and TCRs"},
+  {"doi": "10.1016/j.str.2021.01.005",
+   "note": "Guest et al. 2021 Structure: antibody-antigen docking and affinity benchmark with unbound antibody and antigen"}
+ ]
+}
