@@ -202,6 +202,16 @@ Endpoint: `POST /people/{id}/track`
 
 Uploads absorb matching citation stubs (`merge_reference_stubs_into_paper`, now matching every
 spelling of a DOI: `arXiv:ID`, bare `ID`, `10.48550/arXiv.ID`). Everything else goes through
+**Authors from the LLM layer** pass through `pdf_parser.clean_authors`: trailing footnote markers
+are stripped and placeholders dropped ("Anonymous Authors" from double-blind ICML/NeurIPS/ICLR
+templates, "Unknown", "et al."). Review templates' margin line numbers (`000`, `001`, …) are
+removed before the first-page window is cut (`strip_line_numbers`). An anonymised PDF carries no
+names at all; set them with the MCP tool `update_paper_metadata`.
+
+**Upload into a stub**: `find_duplicate` also matches a stub (no PDF) whose normalised title, at
+least 35 characters long, is the leading part of the upload's title, so a reading-list entry with
+a short title is filled instead of duplicated.
+
 `backend/scripts/merge_duplicates.py`, run inside the backend container:
 
 ```bash

@@ -11,6 +11,11 @@ def _normalize_title(title: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", "", title.lower())).strip()
 
 
+def _is_short_title_of(short: str, full: str) -> bool:
+    """``short`` (normalised) is a long-enough leading part of ``full`` (normalised)."""
+    return len(short) >= 35 and short != full and full.startswith(short)
+
+
 def _prefer_full_paper(rows: list[dict]) -> dict | None:
     if not rows:
         return None
@@ -67,6 +72,14 @@ def find_duplicate(
         preferred = _prefer_full_paper(matched)
         if preferred:
             return preferred
+
+        # A stub (no PDF) whose title is the short form of this one, e.g. a reading-list entry
+        # "Structural memorization in AlphaFold: adversarial mutations" for the full workshop
+        # title: fill the stub instead of creating a second node.
+        stubs = [row for row in rows if not row["p"].get("drive_file_id")
+                 and _is_short_title_of(_normalize_title(row["p"].get("title", "")), norm)]
+        if len(stubs) == 1:
+            return dict(stubs[0]["p"])
 
     return None
 

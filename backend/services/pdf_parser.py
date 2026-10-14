@@ -84,6 +84,38 @@ def find_doi(text: str) -> str | None:
     return None
 
 
+# ── Author cleaning ──────────────────────────────────────────────────────────
+
+# Double-blind submissions (ICML/NeurIPS/ICLR templates) print a placeholder where the byline
+# goes, e.g. "Anonymous Authors1" with the affiliation footnote glued on; the LLM reads it as
+# a name and the upload created a Person called "Anonymous Authors".
+_PLACEHOLDER_AUTHOR_RE = re.compile(
+    r"^(?:anonymous|anonymi[sz]ed)(?:\s+(?:authors?|submission))?"
+    r"|^(?:authors?|author names?)(?:\s+(?:withheld|hidden|omitted))?$"
+    r"|^(?:unknown|n/?a|none|et al\.?)$",
+    re.IGNORECASE,
+)
+# Review templates number every line in the margin; pypdf emits them as "000", "001", …
+# lines that eat the LLM's first-page window before the title.
+_LINE_NUMBER_RE = re.compile(r"^\s*\d{3}\s*$\n?", re.MULTILINE)
+
+
+def clean_authors(names) -> list[str]:
+    """Strip footnote markers and drop placeholders ("Anonymous Authors", "Unknown");
+    keeps order, removes repeats."""
+    out: list[str] = []
+    for raw in names or []:
+        name = re.sub(r"[\d*†‡§¶∗,;]+$", "", str(raw).strip()).strip()
+        if not name or _PLACEHOLDER_AUTHOR_RE.match(name) or name in out:
+            continue
+        out.append(name)
+    return out
+
+
+def strip_line_numbers(text: str) -> str:
+    return _LINE_NUMBER_RE.sub("", text)
+
+
 # ── Layer 2: LLM via LiteLLM ──────────────────────────────────────────────────
 
 def extract_metadata_with_llm(first_page_text: str) -> dict | None:
@@ -105,7 +137,7 @@ Paper text:
         data = json.loads(raw)
         return {
             "title": str(data.get("title") or "").strip(),
-            "authors": [str(a) for a in (data.get("authors") or [])],
+            "authors": clean_authors(data.get("authors")),
             "year": data.get("year"),
             "venue": data.get("venue"),
             "abstract": data.get("abstract"),
@@ -248,7 +280,7 @@ def extract_metadata(pdf_bytes: bytes, *, allow_llm: bool = True, max_pages: int
 
     # Layer 1: LLM (Gemma via LiteLLM) — primary metadata extractor.
     if allow_llm:
-        first_page = text[:3000]
+        first_page = strip_line_numbers(text)[:3000]
         try:
             result = extract_metadata_with_llm(first_page)
             if result and result.get("title"):

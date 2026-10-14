@@ -59,6 +59,12 @@ Ask Claude: *"Can you list my recent papers?"* — Claude should call `search_pa
 | `get_person_papers` | Papers associated with a person |
 | `add_person` | Create a person node |
 | `create_project` | Create a new project |
+| `upload_pdf` | Add a paper with its PDF (local path, URL, arXiv id or DOI) |
+| `find_duplicates` | Duplicate groups, each with the paper to keep |
+| `merge_papers` | Merge duplicates into one paper, nothing lost (`dry_run` by default) |
+| `update_paper_metadata` | Correct title, year, venue, DOI, abstract or the author list |
+| `regenerate_summary` | Re-run the AI summary from the stored full text |
+| `delete_paper` | Delete a paper with its note, highlights and PDF (needs `confirm=true`) |
 
 ---
 

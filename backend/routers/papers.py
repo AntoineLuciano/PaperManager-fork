@@ -987,50 +987,18 @@ def update(paper_id: str, body: PaperUpdate):
 
 @router.delete("/{paper_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete(paper_id: str):
-    driver = get_driver()
-    paper = get_paper(driver, paper_id)
-    if not paper:
+    """Delete the paper, its note, claims, figures, highlights and PDF (services/paper_delete.py)."""
+    from services.paper_delete import delete_paper_completely
+
+    if not delete_paper_completely(get_driver(), paper_id):
         raise HTTPException(status_code=404, detail="Paper not found")
-
-    # Delete figure images from Drive, then figure nodes from Neo4j
-    figs = list_figures(driver, paper_id)
-    for fig in figs:
-        if fig.get("drive_file_id"):
-            try:
-                delete_file(fig["drive_file_id"])
-            except Exception as exc:
-                log.warning("Figure Drive delete failed (non-fatal) | %s", exc)
-    if figs:
-        delete_figures_for_paper(driver, paper_id)
-        log.info("Figures deleted | count=%d | paper_id=%s", len(figs), paper_id)
-
-    # Delete the note and the other nodes that only exist for this paper
-    with driver.session() as session:
-        session.run(
-            """
-            MATCH (p:Paper {id: $id})-[:HAS_NOTE|HAS_CLAIM|HAS_TABLE|HAS_CHAPTER|HAS_ANNOTATION]->(c)
-            DETACH DELETE c
-            """,
-            id=paper_id,
-        )
-
-    # Delete PDF from Drive (best-effort)
-    if paper.get("drive_file_id"):
-        try:
-            delete_file(paper["drive_file_id"])
-            log.info("Drive file deleted | file_id=%s", paper["drive_file_id"])
-        except Exception as exc:
-            log.warning("Drive delete failed (non-fatal) | %s", exc)
-
-    delete_paper(driver, paper_id)
-    log.info("Paper deleted | id=%s | title=%.60s", paper_id, paper.get("title"))
 
 
 @router.post("/{paper_id}/reextract-metadata")
 def reextract_metadata_endpoint(paper_id: str):
     """Re-extract all metadata fields from the stored raw_text using the full pipeline."""
     from services.pdf_parser import (
-        find_doi, extract_metadata_with_llm,
+        find_doi, extract_metadata_with_llm, strip_line_numbers,
         extract_abstract_from_text, extract_abstract_with_ai,
     )
     from services.metadata_lookup import (
@@ -1057,7 +1025,7 @@ def reextract_metadata_endpoint(paper_id: str):
 
     # Layer 2: LLM fallback
     if not extracted.get("title"):
-        llm = extract_metadata_with_llm(raw_text[:3000])
+        llm = extract_metadata_with_llm(strip_line_numbers(raw_text)[:3000])
         if llm and llm.get("title"):
             extracted = llm
             # Try S2 title upgrade

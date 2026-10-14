@@ -76,8 +76,22 @@ A paper note is the user's own text followed by chat answers the frontend saved 
 | Tool | Description |
 |---|---|
 | `add_paper_metadata` | Add a paper by metadata (no PDF) |
+| `upload_pdf` | Add a paper with its PDF through the full upload pipeline (path, URL, arXiv id or DOI) |
 | `list_tags` | All tags with counts |
 | `list_topics` | All topics with counts |
+
+### Maintenance (`tools/maintenance_tools.py`)
+
+Write tools preview by default: `merge_papers` runs with `dry_run=true`, `delete_paper` needs
+`confirm=true`.
+
+| Tool | Description |
+|---|---|
+| `find_duplicates` | Duplicate groups from `services/duplicate_scan.py` (keeper + papers to merge into it), optionally by class; papers carrying another paper's DOI |
+| `merge_papers` | `services/paper_merge.py`: merge `remove_ids` into `keep_id` without losing notes, highlights, links or the PDF; `dry_run` reports only |
+| `update_paper_metadata` | Correct title, year, venue, DOI, abstract, date, type; `authors` replaces the author list (placeholders dropped, orphaned people removed) |
+| `regenerate_summary` | Re-run the summary on the stored full text (LiteLLM summary model) |
+| `delete_paper` | `services/paper_delete.py` (shared with `DELETE /papers/{id}`): paper, note, highlights, claims, figures, PDF to Drive trash; preview unless `confirm=true` |
 
 ### People & Projects
 
