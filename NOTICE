@@ -1,0 +1,11 @@
+PaperManager
+
+The interactive concepts feature (backend/services/concepts.py,
+prompts/concept_*.txt, frontend/src/components/concepts/) is adapted from
+Get It. (https://github.com/beltromatti/get-it), Copyright the Get It.
+authors, licensed under the Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
+
+Changes: prompts rewritten for research papers; the "3d" renderer dropped;
+graphs carry data instead of code; model-written animation code runs in a
+sandboxed iframe instead of the page; Python backend on Neo4j.

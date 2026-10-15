@@ -59,6 +59,7 @@ This means every capability is available both via HTTP (browser) and via MCP too
 | `blogs.py` | `/blogs` | Blog RSS management + post reader |
 | `venues.py` | `/venues` | Venue browser |
 | `claims.py` | `/papers/{id}/claims` | Claim extraction and search |
+| `concepts.py` | `/papers/{id}/concepts` | Interactive concepts on PDF pages (services/concepts.py; ported from Get It.) |
 | `synthesis.py` | `/synthesis` | Cross-paper synthesis (Claude Opus) |
 | `research_gaps.py` | `/research-gaps` | Research gap analysis (Claude Opus) |
 | `author_tracker.py` | `/people/{id}/track` | Author auto-import tracking |
@@ -106,6 +107,7 @@ This means every capability is available both via HTTP (browser) and via MCP too
 | `chapters.py` | Chapter |
 | `blogs.py` | Blog + BlogPost |
 | `claims.py` | Claim |
+| `concepts.py` | Concept |
 | `conversations.py` | Conversation + Message |
 | `users.py` | User |
 | `search.py` | Full-text + filter search |

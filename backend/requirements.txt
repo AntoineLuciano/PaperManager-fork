@@ -8,7 +8,7 @@ python-multipart
 pypdf
 anthropic
 # Claude Code on a Claude subscription; the wheel bundles the CLI binary.
-claude-agent-sdk
+claude-agent-sdk>=0.2.165  # effort + output_format options
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib

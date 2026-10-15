@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 from db.connection import get_driver
 from db.queries.papers import create_paper, get_paper, update_paper, random_paper
+from db.queries.concepts import list_concepts
 from db.queries.search import search_papers as _search
 from db.queries.people import list_people as _list_people
 from db.queries.tags import list_tags as _list_tags
@@ -47,6 +48,16 @@ def register(mcp: FastMCP):
         # Omit raw_text — too large for tool output
         paper.pop("raw_text", None)
         return paper
+
+    @mcp.tool()
+    def get_paper_concepts(paper_id: str) -> list[dict]:
+        """List the interactive concepts detected on a paper's PDF pages (Concepts tab in the app).
+        Each entry has page (0-based), label, type (formula / graph / 2d-text / 2d-anim), context,
+        and the generated visualisation spec if one exists (null otherwise)."""
+        return [
+            {k: c.get(k) for k in ("id", "page", "label", "type", "context", "spec")}
+            for c in list_concepts(get_driver(), paper_id)
+        ]
 
     @mcp.tool()
     def add_paper_metadata(

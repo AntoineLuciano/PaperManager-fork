@@ -317,6 +317,10 @@ def update_paper(driver: Driver, paper_id: str, data: dict) -> dict | None:
 
 def delete_paper(driver: Driver, paper_id: str) -> bool:
     with driver.session() as session:
+        session.run(
+            "MATCH (:Paper {id: $id})-[:HAS_CONCEPT]->(c:Concept) DETACH DELETE c",
+            id=paper_id,
+        )
         result = session.run(
             "MATCH (p:Paper {id: $id}) DETACH DELETE p RETURN count(p) AS deleted",
             id=paper_id,

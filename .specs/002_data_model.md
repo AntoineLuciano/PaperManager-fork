@@ -144,6 +144,20 @@ A factual claim extracted from a paper's text by Claude Haiku.
 | `text` | string |
 | `type` | `"finding"` / `"method"` / `"limitation"` / `"contribution"` |
 
+### Concept
+An idea on one PDF page that gets an interactive visualisation (Concepts tab in the paper view). `(Paper)-[:HAS_CONCEPT]->(Concept)`; deleted with the paper.
+
+| Property | Type |
+|---|---|
+| `id` | UUID |
+| `page`, `position` | int (0-based page; order within the scan) |
+| `label`, `context` | string (context is what the visualiser model sees) |
+| `type` | `"formula"` / `"graph"` / `"2d-text"` / `"2d-anim"` |
+| `anchor`, `anchor_found` | verbatim page text used to mark the concept on the PDF; whether it was found in pypdf's text |
+| `spec_json` | JSON string of the generated visualisation, absent until first opened |
+| `spec_error` | last generation error, if any |
+| `created_at`, `updated_at` | datetime |
+
 ### Blog / BlogPost
 
 **Blog** — a registered RSS feed:

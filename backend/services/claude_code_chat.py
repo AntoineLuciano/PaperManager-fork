@@ -193,6 +193,56 @@ def knowledge_chat_claude_code(
     yield from _drive(run)
 
 
+def run_structured_claude_code(
+    system: str,
+    prompt: str,
+    schema: dict[str, Any],
+    *,
+    model: str = "sonnet",
+    effort: str = "medium",
+) -> dict[str, Any]:
+    """One tool-less Claude Code turn whose answer is JSON matching *schema*.
+
+    *model* is a CLI alias ("sonnet", "opus", "haiku"): it resolves to the
+    newest model of that family on the subscription.
+    """
+    _require_available()
+
+    async def run(emit: Callable[[dict[str, Any]], None]) -> None:
+        from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
+
+        options = ClaudeAgentOptions(
+            system_prompt=system,
+            model=model,
+            effort=effort,
+            output_format={"type": "json_schema", "schema": schema},
+            tools=[],
+            allowed_tools=[],
+            strict_mcp_config=True,
+            permission_mode="dontAsk",
+            setting_sources=[],
+            cwd=tempfile.gettempdir(),
+            env=_subprocess_env(),
+        )
+
+        async def messages():
+            yield {"type": "user", "message": {"role": "user", "content": prompt}}
+
+        async for message in query(prompt=messages(), options=options):
+            if isinstance(message, ResultMessage):
+                if message.is_error:
+                    detail = "; ".join(message.errors or []) or message.result or message.subtype
+                    raise RuntimeError(f"Claude Code failed: {detail}")
+                emit({"type": "result", "data": message.structured_output})
+
+    for event in _drive(run):
+        if event["type"] == "result":
+            if not isinstance(event["data"], dict):
+                raise RuntimeError("Claude Code returned no structured output")
+            return event["data"]
+    raise RuntimeError("Claude Code returned no result")
+
+
 def chat_with_paper_claude_code(
     paper_text: str,
     paper_title: str,

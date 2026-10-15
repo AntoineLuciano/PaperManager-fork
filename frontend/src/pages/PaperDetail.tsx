@@ -2,19 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { mdPlugins, inlineMd } from "../lib/markdown";
-import { apiFetch, extractReferences, aiExtractReferences, saveReferences, listReferences, ingestFromUrl, previewUrl, suggestTags, applyTags, createStandaloneTag, suggestTopics, fetchFigures, fetchTables, extractFiguresForPaper, chatWithFigure, deletePaper, removeAuthor, addAuthorByName, aiExtractAuthors, fetchGraph, fetchPaperInvolves, regenerateSummary, updatePaper, refetchPdf, reextractAbstract, aiExtractMetadata, parsePdf, fetchPaperProjects, listProjects, addPaperToProject, removePaperFromProject, getPaperClaims, extractPaperClaims, getRelatedPapers, discoverAdd, listAnnotations, exportPaperMarkdown, getOrCreatePerson, linkPersonInvolves } from "../api/client";
+import { apiFetch, extractReferences, aiExtractReferences, saveReferences, listReferences, ingestFromUrl, previewUrl, suggestTags, applyTags, createStandaloneTag, suggestTopics, fetchFigures, fetchTables, extractFiguresForPaper, chatWithFigure, deletePaper, removeAuthor, addAuthorByName, aiExtractAuthors, fetchGraph, fetchPaperInvolves, regenerateSummary, updatePaper, refetchPdf, reextractAbstract, aiExtractMetadata, parsePdf, fetchPaperProjects, listProjects, addPaperToProject, removePaperFromProject, getPaperClaims, extractPaperClaims, getRelatedPapers, discoverAdd, listAnnotations, exportPaperMarkdown, getOrCreatePerson, linkPersonInvolves, listConcepts } from "../api/client";
 import NoteEditor from "../components/NoteEditor";
 import ChatPanel from "../components/ChatPanel";
 import EditPaperModal from "../components/EditPaperModal";
 import BookChapters from "../components/BookChapters";
 import PdfAnnotator from "../components/PdfAnnotator";
-import type { PdfAnnotatorHandle } from "../components/PdfAnnotator";
+import type { PdfAnnotatorHandle, ConceptMark } from "../components/PdfAnnotator";
+import ConceptsPanel from "../components/concepts/ConceptsPanel";
 import { SpecialZoomLevel } from "@react-pdf-viewer/core";
 import UploadConfirmModal from "../components/UploadConfirmModal";
 import OnboardingModal from "../components/OnboardingModal";
 import { useAppSettings } from "../contexts/SettingsContext";
 import { notify } from "../lib/notify";
-import type { Paper, Person, Topic, Tag, Reference, Figure, PaperTable, GraphData, ParsedMeta, T_IngestOut, Claim, RelatedPaper, Annotation, AnnotationColor } from "../types";
+import type { Paper, Person, Topic, Tag, Reference, Figure, PaperTable, GraphData, ParsedMeta, T_IngestOut, Claim, RelatedPaper, Annotation, AnnotationColor, Concept, ConceptsBackend } from "../types";
 
 const PAPER_GRAPH_NODE_COLORS: Record<string, string> = {
   paper: "#7c3aed", person: "#2563eb", topic: "#16a34a",
@@ -38,7 +39,7 @@ interface PaperFull extends Paper {
   tags?: Tag[];
 }
 
-type RightTab = "notes" | "chat" | "highlights";
+type RightTab = "notes" | "chat" | "highlights" | "concepts";
 
 export default function PaperDetail() {
   const { id } = useParams<{ id: string }>();
@@ -89,6 +90,30 @@ export default function PaperDetail() {
   const [pdfScale, setPdfScale] = useState<number | SpecialZoomLevel>(SpecialZoomLevel.PageWidth);
   const resolvedScale = useRef<number>(1);
   const [pdfInitialPage, setPdfInitialPage] = useState(0);
+
+  // Interactive concepts (right-pane tab, marked on the PDF while that tab is open)
+  const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [conceptsBackend, setConceptsBackend] = useState<ConceptsBackend | null>(null);
+  const [activeConceptId, setActiveConceptId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    setConcepts([]);
+    setActiveConceptId(null);
+    listConcepts(id)
+      .then((r) => { setConcepts(r.concepts); setConceptsBackend(r.backend); })
+      .catch(() => {});
+  }, [id]);
+  const conceptMarks: ConceptMark[] | undefined = tab === "concepts"
+    ? concepts.map((c) => ({ id: c.id, page: c.page, anchor: c.anchor, label: c.label, active: c.id === activeConceptId }))
+    : undefined;
+  const showPdfPage = (page: number) => {
+    if (leftTab === "pdf") {
+      pdfRef.current?.jumpToPage(page);
+    } else {
+      setPdfInitialPage(page);
+      setLeftTab("pdf");
+    }
+  };
 
   const adjustScale = (delta: number) => {
     setPdfScale((s) => {
@@ -1425,6 +1450,8 @@ export default function PaperDetail() {
                 scale={pdfScale}
                 initialPage={pdfInitialPage}
                 onScaleResolved={(s) => { resolvedScale.current = s; }}
+                conceptMarks={conceptMarks}
+                onConceptClick={(cid) => { setTab("concepts"); setActiveConceptId(cid); }}
               />
             </div>
           )}
@@ -2483,7 +2510,7 @@ export default function PaperDetail() {
 
           {/* Tabs: Notes / Chat / Highlights */}
           <div className="flex border-b border-gray-100 shrink-0">
-            {(["notes", "chat", "highlights"] as RightTab[]).map((t) => (
+            {(["notes", "chat", "highlights", "concepts"] as RightTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -2495,6 +2522,8 @@ export default function PaperDetail() {
               >
                 {t === "highlights"
                   ? `Highlights${annotations.length > 0 ? ` (${annotations.length})` : ""}`
+                  : t === "concepts"
+                  ? `Concepts${concepts.length > 0 ? ` (${concepts.length})` : ""}`
                   : t}
               </button>
             ))}
@@ -2515,6 +2544,20 @@ export default function PaperDetail() {
               />
             )}
             {tab === "chat" && id && <ChatPanel paperId={id} />}
+            {tab === "concepts" && id && (
+              <ConceptsPanel
+                paperId={id}
+                hasPdf={!!paper?.drive_file_id}
+                concepts={concepts}
+                backend={conceptsBackend}
+                onConceptsChange={setConcepts}
+                activeId={activeConceptId}
+                onActivate={(c) => {
+                  setActiveConceptId(c?.id ?? null);
+                  if (c && !(leftTab === "pdf" && activeConceptId === c.id)) showPdfPage(c.page);
+                }}
+              />
+            )}
             {tab === "highlights" && (
               <div className="h-full overflow-y-auto">
                 {annotations.length === 0 ? (

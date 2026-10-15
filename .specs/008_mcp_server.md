@@ -35,6 +35,7 @@ The MCP server runs as a separate process from the FastAPI backend and communica
 |---|---|
 | `search_papers` | Search by keyword, tag, topic, project, person, year range, reading_status, or bookmark |
 | `get_paper_detail` | Full paper metadata including reading_status, rating, bookmarked, venue |
+| `get_paper_concepts` | Concepts detected on the paper's PDF pages, with any generated visualisation spec |
 | `get_random_paper` | Random paper (optionally filtered by reading_status) |
 
 ### Reading the library (no model calls)

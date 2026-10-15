@@ -411,3 +411,60 @@ export interface IdeogramGenerateResult {
   seed: number;
   caption: IdeogramCaption | string;
 }
+
+// ── Concepts (interactive visualisations on PDF pages) ───────────────────────
+
+export type ConceptType = "formula" | "graph" | "2d-text" | "2d-anim";
+
+export interface FormulaSpec {
+  type: "formula";
+  title: string;
+  caption: string;
+  main_latex: string;
+  steps: { latex: string; explanation: string }[];
+}
+
+export interface GraphSpec {
+  type: "graph";
+  title: string;
+  caption: string;
+  chart_type: "lines" | "points" | "bars";
+  x_label: string;
+  y_label: string;
+  /** JSON string: {series:[{name,color,points}]}, {points}, or {bars:[{label,value}]} */
+  data_json: string;
+}
+
+export interface TextSpec {
+  type: "2d-text";
+  title: string;
+  caption: string;
+  body_markdown: string;
+  citations: { label: string; source: string; url: string }[];
+}
+
+export interface AnimSpec {
+  type: "2d-anim";
+  title: string;
+  caption: string;
+  /** Function body returning { draw(ctx, w, h, time, dt) }; runs in a sandboxed iframe. */
+  setup_code: string;
+}
+
+export type ConceptSpec = FormulaSpec | GraphSpec | TextSpec | AnimSpec;
+
+export interface Concept {
+  id: string;
+  /** 0-based PDF page index */
+  page: number;
+  position: number;
+  label: string;
+  type: ConceptType;
+  anchor: string;
+  anchor_found: boolean;
+  context: string;
+  spec: ConceptSpec | null;
+  spec_error: string | null;
+}
+
+export type ConceptsBackend = "claude-code" | "api";

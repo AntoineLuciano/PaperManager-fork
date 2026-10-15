@@ -1,5 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Viewer, Worker, SpecialZoomLevel } from "@react-pdf-viewer/core";
+import { Viewer, Worker, SpecialZoomLevel, getPage } from "@react-pdf-viewer/core";
+import type { PdfJs } from "@react-pdf-viewer/core";
 import { highlightPlugin, Trigger } from "@react-pdf-viewer/highlight";
 import type {
   HighlightArea,
@@ -10,6 +11,7 @@ import "@react-pdf-viewer/core/lib/styles/index.css";
 import "@react-pdf-viewer/highlight/lib/styles/index.css";
 
 import type { Annotation, AnnotationColor } from "../types";
+import { findAnchorAreas, type TextItemLike } from "./concepts/anchors";
 import {
   listAnnotations,
   createAnnotation,
@@ -50,6 +52,18 @@ interface Props {
   onScaleResolved?: (scale: number) => void;
   /** Initial page to show (0-indexed). Used when the component first mounts. */
   initialPage?: number;
+  /** Concepts to mark on the pages; located by their anchor text. */
+  conceptMarks?: ConceptMark[];
+  onConceptClick?: (conceptId: string) => void;
+}
+
+export interface ConceptMark {
+  id: string;
+  /** 0-based page index */
+  page: number;
+  anchor: string;
+  label: string;
+  active: boolean;
 }
 
 interface TooltipPos {
@@ -63,7 +77,7 @@ export interface PdfAnnotatorHandle {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-const PdfAnnotator = forwardRef<PdfAnnotatorHandle, Props>(function PdfAnnotator({ paperId, pdfUrl, onHighlightsChange, onScaleResolved, scale = SpecialZoomLevel.PageWidth, initialPage = 0 }, ref) {
+const PdfAnnotator = forwardRef<PdfAnnotatorHandle, Props>(function PdfAnnotator({ paperId, pdfUrl, onHighlightsChange, onScaleResolved, scale = SpecialZoomLevel.PageWidth, initialPage = 0, conceptMarks, onConceptClick }, ref) {
   const [highlights, setHighlights] = useState<Annotation[]>([]);
   const [activeAnnotation, setActiveAnnotation] = useState<Annotation | null>(null);
   const [tooltipPos, setTooltipPos] = useState<TooltipPos | null>(null);
@@ -92,6 +106,51 @@ const PdfAnnotator = forwardRef<PdfAnnotatorHandle, Props>(function PdfAnnotator
       setViewerKey((k) => k + 1);
     },
   }));
+
+  // ── Concept marks: anchor text → highlight areas ─────────────────────────
+  const [pdfDoc, setPdfDoc] = useState<PdfJs.PdfDocument | null>(null);
+  const [conceptAreas, setConceptAreas] = useState<Record<string, HighlightArea[]>>({});
+  const pageTextCache = useRef(new Map<number, Promise<{ items: TextItemLike[]; viewport: PdfJs.ViewPort }>>());
+
+  useEffect(() => {
+    pageTextCache.current.clear();
+  }, [pdfDoc]);
+
+  useEffect(() => {
+    if (!pdfDoc || !conceptMarks?.length) {
+      setConceptAreas({});
+      return;
+    }
+    let cancelled = false;
+    const pageText = (page: number) => {
+      let entry = pageTextCache.current.get(page);
+      if (!entry) {
+        entry = getPage(pdfDoc, page).then(async (p) => ({
+          items: (await p.getTextContent()).items as unknown as TextItemLike[],
+          viewport: p.getViewport({ scale: 1 }),
+        }));
+        pageTextCache.current.set(page, entry);
+      }
+      return entry;
+    };
+    Promise.all(
+      conceptMarks
+        .filter((m) => m.page < pdfDoc.numPages)
+        .map(async (m) => {
+          const { items, viewport } = await pageText(m.page);
+          const toRect = ([x1, y1, x2, y2]: [number, number, number, number]) => [
+            ...viewport.convertToViewportPoint(x1, y1),
+            ...viewport.convertToViewportPoint(x2, y2),
+          ];
+          return [m.id, findAnchorAreas(items, viewport.width, viewport.height, toRect, m.page, m.anchor)] as const;
+        }),
+    )
+      .then((entries) => { if (!cancelled) setConceptAreas(Object.fromEntries(entries)); })
+      .catch((err) => console.warn("Could not place concept marks", err));
+    return () => { cancelled = true; };
+  // Re-run when the set of marks changes, not on every parent render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfDoc, conceptMarks?.map((m) => `${m.id}:${m.page}`).join("|")]);
 
   // Load annotations on mount
   useEffect(() => {
@@ -166,6 +225,26 @@ const PdfAnnotator = forwardRef<PdfAnnotatorHandle, Props>(function PdfAnnotator
 
   const renderHighlights = (props: RenderHighlightsProps) => (
     <>
+      {(conceptMarks ?? []).flatMap((mark) =>
+        (conceptAreas[mark.id] ?? [])
+          .filter((area) => area.pageIndex === props.pageIndex)
+          .map((area, idx) => (
+            <div
+              key={`concept-${mark.id}-${idx}`}
+              title={mark.label}
+              onClick={() => onConceptClick?.(mark.id)}
+              style={{
+                ...props.getCssProperties(area, props.rotation),
+                position: "absolute",
+                zIndex: 3,
+                cursor: "pointer",
+                background: mark.active ? "rgba(124, 58, 237, 0.22)" : "rgba(124, 58, 237, 0.07)",
+                borderBottom: "2px dashed rgba(124, 58, 237, 0.75)",
+                mixBlendMode: "multiply",
+              }}
+            />
+          )),
+      )}
       {highlights
         .filter((ann) => {
           const areas: HighlightArea[] = JSON.parse(ann.position_json);
@@ -286,6 +365,7 @@ const PdfAnnotator = forwardRef<PdfAnnotatorHandle, Props>(function PdfAnnotator
             plugins={[plugin]}
             onPageChange={(e) => setCurrentPage(e.currentPage)}
             onDocumentLoad={(e) => {
+              setPdfDoc(e.doc);
               // Only resolve the fit scale when the scale is a SpecialZoomLevel.
               // For numeric zoom steps the viewer remounts too, but we must NOT
               // overwrite resolvedScale.current back to the fit value.

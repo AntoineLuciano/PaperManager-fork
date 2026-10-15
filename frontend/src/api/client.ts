@@ -1,4 +1,4 @@
-import type { T_IngestOut, ParsedMeta, GraphData, Reference, Conversation, KnowledgeMessage, SseEvent, BulkSseEvent, Figure, PaperTable, LiteratureSseEvent, Paper, Chapter, Blog, BlogPost, Note, Annotation, AnnotationColor, VenueOut, Claim , IdeogramCaption, IdeogramSessionStatus, IdeogramGenerateBody, IdeogramGenerateResult} from "../types";
+import type { T_IngestOut, ParsedMeta, GraphData, Reference, Conversation, KnowledgeMessage, SseEvent, BulkSseEvent, Figure, PaperTable, LiteratureSseEvent, Paper, Chapter, Blog, BlogPost, Note, Annotation, AnnotationColor, VenueOut, Claim , IdeogramCaption, IdeogramSessionStatus, IdeogramGenerateBody, IdeogramGenerateResult, Concept, ConceptsBackend } from "../types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -1400,5 +1400,32 @@ export async function ideogramGenerate(body: IdeogramGenerateBody): Promise<Ideo
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+// ── Concepts ─────────────────────────────────────────────────────────────────
+
+export async function listConcepts(paperId: string): Promise<{ concepts: Concept[]; backend: ConceptsBackend }> {
+  return apiFetch(`/papers/${paperId}/concepts`);
+}
+
+export async function detectConcepts(paperId: string): Promise<{
+  concepts: Concept[];
+  backend: ConceptsBackend;
+  pages_total: number;
+  pages_scanned: number;
+}> {
+  return apiFetch(`/papers/${paperId}/concepts/detect`, { method: "POST" });
+}
+
+export async function generateConceptViz(paperId: string, conceptId: string, force = false): Promise<Concept> {
+  return apiFetch(`/papers/${paperId}/concepts/${conceptId}/viz${force ? "?force=true" : ""}`, { method: "POST" });
+}
+
+export async function repairConceptViz(paperId: string, conceptId: string, error: string): Promise<Concept> {
+  return apiFetch(`/papers/${paperId}/concepts/${conceptId}/repair`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ error }),
   });
 }
