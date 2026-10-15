@@ -1,4 +1,4 @@
-import type { T_IngestOut, ParsedMeta, GraphData, Reference, Conversation, KnowledgeMessage, SseEvent, BulkSseEvent, Figure, PaperTable, LiteratureSseEvent, Paper, Chapter, Blog, BlogPost, Note, Annotation, AnnotationColor, VenueOut, Claim , IdeogramCaption, IdeogramSessionStatus, IdeogramGenerateBody, IdeogramGenerateResult, Concept, ConceptsBackend } from "../types";
+import type { T_IngestOut, ParsedMeta, GraphData, Reference, Conversation, KnowledgeMessage, SseEvent, BulkSseEvent, Figure, PaperTable, LiteratureSseEvent, Paper, Chapter, Blog, BlogPost, Note, Annotation, AnnotationColor, VenueOut, Claim , IdeogramCaption, IdeogramSessionStatus, IdeogramGenerateBody, IdeogramGenerateResult, Concept, ConceptsBackend, ConceptGeneration } from "../types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -1405,17 +1405,27 @@ export async function ideogramGenerate(body: IdeogramGenerateBody): Promise<Ideo
 
 // ── Concepts ─────────────────────────────────────────────────────────────────
 
-export async function listConcepts(paperId: string): Promise<{ concepts: Concept[]; backend: ConceptsBackend }> {
+export interface ConceptsList {
+  concepts: Concept[];
+  backend: ConceptsBackend;
+  generation: ConceptGeneration | null;
+}
+
+export async function listConcepts(paperId: string): Promise<ConceptsList> {
   return apiFetch(`/papers/${paperId}/concepts`);
 }
 
-export async function detectConcepts(paperId: string): Promise<{
-  concepts: Concept[];
-  backend: ConceptsBackend;
+/** Scan the PDF; with `generate`, every visualisation is then generated in the background. */
+export async function detectConcepts(paperId: string, generate = false): Promise<ConceptsList & {
   pages_total: number;
   pages_scanned: number;
 }> {
-  return apiFetch(`/papers/${paperId}/concepts/detect`, { method: "POST" });
+  return apiFetch(`/papers/${paperId}/concepts/detect${generate ? "?generate=true" : ""}`, { method: "POST" });
+}
+
+/** Start generating every visualisation that does not exist yet. */
+export async function generateAllConcepts(paperId: string): Promise<ConceptsList> {
+  return apiFetch(`/papers/${paperId}/concepts/generate`, { method: "POST" });
 }
 
 export async function generateConceptViz(paperId: string, conceptId: string, force = false): Promise<Concept> {

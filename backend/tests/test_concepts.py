@@ -236,6 +236,8 @@ STORED = {"id": "c1", "page": 1, "label": "EDM loss", "type": "formula",
 def _auth():
     app.dependency_overrides[get_current_user] = lambda: "tester"
     rc._detecting.clear()
+    rc._jobs.clear()
+    rc._inflight.clear()
     yield
     app.dependency_overrides.clear()
 
@@ -259,7 +261,7 @@ async def test_list(client, monkeypatch):
     monkeypatch.setattr(rc, "list_concepts", lambda d, pid: [STORED])
     resp = await client.get("/papers/p1/concepts")
     assert resp.status_code == 200
-    assert resp.json() == {"concepts": [STORED], "backend": "claude-code"}
+    assert resp.json() == {"concepts": [STORED], "backend": "claude-code", "generation": None}
 
 
 async def test_detect_stores_found_concepts(client, monkeypatch):
@@ -384,3 +386,198 @@ def test_detect_batches_see_the_request_user():
     finally:
         reset_request_user(token)
     assert seen == ["niklas"] * 3
+
+
+# ── Generate all ─────────────────────────────────────────────────────────────
+
+class FakeStore:
+    """In-memory stand-in for the Concept queries the generation job uses."""
+
+    def __init__(self, concepts):
+        self.concepts = {c["id"]: dict(c) for c in concepts}
+
+    def get(self, d, pid, cid):
+        c = self.concepts.get(cid)
+        return dict(c) if c else None
+
+    def set(self, d, pid, cid, spec, err=None):
+        if cid not in self.concepts:
+            return None
+        self.concepts[cid].update(spec=spec, spec_error=err)
+        return dict(self.concepts[cid])
+
+    def list(self, d, pid):
+        return [dict(c) for c in self.concepts.values()]
+
+
+def _wait_for_job(pid, timeout=5.0):
+    import time
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = rc._generation_status(pid)
+        if status is None or not status.running:
+            return status
+        time.sleep(0.01)
+    raise AssertionError("generation job did not finish")
+
+
+def _patch_store(monkeypatch, store, gen):
+    monkeypatch.setattr(rc, "get_driver", lambda: None)
+    monkeypatch.setattr(rc, "get_concept", store.get)
+    monkeypatch.setattr(rc, "set_concept_spec", store.set)
+    monkeypatch.setattr(rc, "list_concepts", store.list)
+    monkeypatch.setattr(rc, "generate_spec", gen)
+
+
+def test_start_generation_fills_every_missing_spec_and_records_failures(monkeypatch):
+    concepts = [
+        {**STORED, "id": "a"},
+        {**STORED, "id": "b", "spec": {"type": "formula", "main_latex": "old"}},
+        {**STORED, "id": "c", "label": "broken"},
+    ]
+    store = FakeStore(concepts)
+    calls = []
+
+    def gen(c, title, prev=None):
+        calls.append(c["id"])
+        if c["label"] == "broken":
+            raise sc.ConceptsError("bad spec")
+        return {"type": "formula", "main_latex": c["id"]}
+
+    _patch_store(monkeypatch, store, gen)
+    status = rc.start_generation("p1", concepts, "EDM")
+    assert status.total == 2  # "b" already has a spec
+    final = _wait_for_job("p1")
+    assert (final.total, final.done, final.failed, final.running) == (2, 2, 1, False)
+    assert sorted(calls) == ["a", "c"]
+    assert store.concepts["a"]["spec"]["main_latex"] == "a"
+    assert store.concepts["b"]["spec"]["main_latex"] == "old"
+    assert store.concepts["c"]["spec_error"] == "bad spec"
+    assert rc._inflight == set()
+
+
+def test_start_generation_with_nothing_missing_starts_no_job(monkeypatch):
+    _patch_store(monkeypatch, FakeStore([]), MagicMock())
+    assert rc.start_generation("p1", [{**STORED, "spec": {"type": "formula"}}], "") is None
+    assert "p1" not in rc._jobs
+
+
+def test_generation_runs_as_the_request_user(monkeypatch):
+    """The job's threads must inherit the request user, or Claude Code is refused."""
+    from services.auth import get_request_user, reset_request_user, set_request_user
+
+    seen = []
+
+    def gen(c, title, prev=None):
+        seen.append(get_request_user())
+        return {"type": "formula", "main_latex": "x"}
+
+    _patch_store(monkeypatch, FakeStore([{**STORED, "id": i} for i in "abc"]), gen)
+    token = set_request_user("niklas")
+    try:
+        rc.start_generation("p1", [{**STORED, "id": i} for i in "abc"], "")
+    finally:
+        reset_request_user(token)
+    _wait_for_job("p1")
+    assert seen == ["niklas"] * 3
+
+
+def test_superseded_job_stops_generating(monkeypatch):
+    import threading
+    gate = threading.Event()
+    started = threading.Event()
+    calls = []
+
+    def gen(c, title, prev=None):
+        calls.append(c["id"])
+        started.set()
+        gate.wait(2)
+        return {"type": "formula", "main_latex": "x"}
+
+    ids = [f"c{i}" for i in range(10)]
+    _patch_store(monkeypatch, FakeStore([{**STORED, "id": i} for i in ids]), gen)
+    monkeypatch.setattr(rc, "GENERATE_CONCURRENCY", 1)
+    rc.start_generation("p1", [{**STORED, "id": i} for i in ids], "")
+    job = rc._jobs["p1"]
+    assert started.wait(2)
+    with rc._jobs_lock:
+        rc._jobs.pop("p1")  # what a re-scan does
+    gate.set()
+    import time
+    deadline = time.monotonic() + 5
+    while job["running"] and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert len(calls) == 1
+
+
+async def test_detect_with_generate_starts_the_job(client, monkeypatch):
+    store = FakeStore([])
+    monkeypatch.setattr(rc, "get_paper", lambda d, pid: PAPER)
+    monkeypatch.setattr(rc, "download_pdf", lambda fid: b"%PDF")
+    monkeypatch.setattr(rc, "page_texts_from_pdf", lambda b: ["p0"])
+    monkeypatch.setattr(rc, "detect_concepts", lambda pages, title: [{"page": 0}])
+
+    def replace(d, pid, cs):
+        store.concepts = {"n1": {**STORED, "id": "n1"}, "n2": {**STORED, "id": "n2"}}
+        return store.list(d, pid)
+
+    monkeypatch.setattr(rc, "replace_concepts", replace)
+    _patch_store(monkeypatch, store, lambda c, title, prev=None: {"type": "formula", "main_latex": "x"})
+    resp = await client.post("/papers/p1/concepts/detect?generate=true")
+    assert resp.status_code == 200
+    assert resp.json()["generation"]["total"] == 2
+    _wait_for_job("p1")
+    listed = (await client.get("/papers/p1/concepts")).json()
+    assert all(c["spec"] for c in listed["concepts"])
+    assert listed["generation"] == {"total": 2, "done": 2, "failed": 0, "running": False}
+
+
+async def test_detect_without_generate_starts_no_job(client, monkeypatch):
+    monkeypatch.setattr(rc, "get_paper", lambda d, pid: PAPER)
+    monkeypatch.setattr(rc, "download_pdf", lambda fid: b"%PDF")
+    monkeypatch.setattr(rc, "page_texts_from_pdf", lambda b: ["p0"])
+    monkeypatch.setattr(rc, "detect_concepts", lambda pages, title: [{"page": 0}])
+    monkeypatch.setattr(rc, "replace_concepts", lambda d, pid, cs: [STORED])
+    resp = await client.post("/papers/p1/concepts/detect")
+    assert resp.json()["generation"] is None and "p1" not in rc._jobs
+
+
+async def test_generate_endpoint_starts_job_for_missing_only(client, monkeypatch):
+    store = FakeStore([{**STORED, "id": "a"}, {**STORED, "id": "b", "spec": {"type": "formula"}}])
+    monkeypatch.setattr(rc, "get_paper", lambda d, pid: PAPER)
+    _patch_store(monkeypatch, store, lambda c, title, prev=None: {"type": "formula", "main_latex": "x"})
+    resp = await client.post("/papers/p1/concepts/generate")
+    assert resp.status_code == 200 and resp.json()["generation"]["total"] == 1
+    _wait_for_job("p1")
+    assert store.concepts["a"]["spec"]["main_latex"] == "x"
+
+
+async def test_viz_waits_for_the_job_instead_of_generating_twice(client, monkeypatch):
+    import threading
+    store = FakeStore([{**STORED, "id": "c1"}])
+    gen = MagicMock()
+    monkeypatch.setattr(rc, "get_paper", lambda d, pid: PAPER)
+    _patch_store(monkeypatch, store, gen)
+    rc._inflight.add("c1")  # the job is generating c1
+
+    def finish():
+        store.set(None, "p1", "c1", {"type": "formula", "main_latex": "from job"})
+        rc._release("c1")
+
+    threading.Timer(0.3, finish).start()
+    resp = await client.post("/papers/p1/concepts/c1/viz")
+    assert resp.status_code == 200 and resp.json()["spec"]["main_latex"] == "from job"
+    gen.assert_not_called()
+
+
+async def test_viz_releases_its_claim_on_failure(client, monkeypatch):
+    monkeypatch.setattr(rc, "get_paper", lambda d, pid: PAPER)
+    monkeypatch.setattr(rc, "get_concept", lambda d, pid, cid: STORED)
+
+    def fail(c, title, prev=None):
+        raise sc.ConceptsError("nope")
+
+    monkeypatch.setattr(rc, "generate_spec", fail)
+    monkeypatch.setattr(rc, "set_concept_spec", lambda *a, **k: None)
+    assert (await client.post("/papers/p1/concepts/c1/viz")).status_code == 502
+    assert rc._inflight == set()

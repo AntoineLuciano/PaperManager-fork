@@ -1,13 +1,21 @@
 // Adapted from Get It. (github.com/beltromatti/get-it, Apache-2.0); see NOTICE.
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { detectConcepts, generateConceptViz, repairConceptViz } from "../../api/client";
-import type { Concept, ConceptsBackend, ConceptType } from "../../types";
+import { detectConcepts, generateAllConcepts, generateConceptViz, listConcepts, repairConceptViz } from "../../api/client";
+import type { Concept, ConceptGeneration, ConceptsBackend, ConceptType } from "../../types";
 import AnimView from "./AnimView";
+import { mergePolled } from "./mergePolled";
 import FormulaView from "./FormulaView";
 import GraphView from "./GraphView";
 import TextView from "./TextView";
 
 const MAX_REPAIRS = 2;
+const POLL_MS = 3000;
+const GENERATE_ALL_KEY = "concepts.generateAll";
+
+function readGenerateAll(): boolean {
+  try { return localStorage.getItem(GENERATE_ALL_KEY) !== "0"; } catch { return true; }
+}
+
 
 const TYPE_BADGE: Record<ConceptType, { label: string; cls: string }> = {
   formula: { label: "formula", cls: "bg-violet-50 text-violet-700" },
@@ -27,15 +35,19 @@ interface Props {
   concepts: Concept[];
   backend: ConceptsBackend | null;
   onConceptsChange: Dispatch<SetStateAction<Concept[]>>;
+  /** The background "generate all" job, if one was started for this paper. */
+  generation: ConceptGeneration | null;
+  onGenerationChange: (g: ConceptGeneration | null) => void;
   activeId: string | null;
   /** Select a concept (and show its page), or null to go back to the list. */
   onActivate: (concept: Concept | null) => void;
 }
 
 export default function ConceptsPanel({
-  paperId, hasPdf, concepts, backend, onConceptsChange, activeId, onActivate,
+  paperId, hasPdf, concepts, backend, onConceptsChange, generation, onGenerationChange, activeId, onActivate,
 }: Props) {
   const [detecting, setDetecting] = useState(false);
+  const [generateAll, setGenerateAll] = useState(readGenerateAll);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
@@ -54,8 +66,9 @@ export default function ConceptsPanel({
     setError(null);
     onActivate(null);
     try {
-      const res = await detectConcepts(paperId);
+      const res = await detectConcepts(paperId, generateAll);
       onConceptsChange(res.concepts);
+      onGenerationChange(res.generation);
       repairs.current = {};
       setScanNote(
         res.pages_scanned < res.pages_total
@@ -68,6 +81,40 @@ export default function ConceptsPanel({
       setDetecting(false);
     }
   }
+
+  function toggleGenerateAll(on: boolean) {
+    setGenerateAll(on);
+    try { localStorage.setItem(GENERATE_ALL_KEY, on ? "1" : "0"); } catch { /* private mode */ }
+  }
+
+  async function startGenerateAll() {
+    setError(null);
+    try {
+      const res = await generateAllConcepts(paperId);
+      onConceptsChange((prev) => mergePolled(prev, res.concepts));
+      onGenerationChange(res.generation);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  // While the background job runs, pick up finished visualisations.
+  const running = !!generation?.running;
+  useEffect(() => {
+    if (!running) return;
+    let stopped = false;
+    const timer = window.setInterval(() => {
+      listConcepts(paperId)
+        .then((r) => {
+          if (stopped) return;
+          onConceptsChange((prev) => mergePolled(prev, r.concepts));
+          onGenerationChange(r.generation);
+        })
+        .catch(() => {});
+    }, POLL_MS);
+    return () => { stopped = true; window.clearInterval(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, paperId]);
 
   async function regenerate(concept: Concept) {
     setBusy("Regenerating…");
@@ -151,6 +198,7 @@ export default function ConceptsPanel({
   }
 
   const pages = [...new Set(concepts.map((c) => c.page))].sort((a, b) => a - b);
+  const missing = concepts.filter((c) => !c.spec).length;
 
   return (
     <div className="h-full flex flex-col gap-2">
@@ -163,6 +211,31 @@ export default function ConceptsPanel({
           {detecting ? "Scanning…" : concepts.length ? "Re-scan" : "Find concepts"}
         </button>
       </div>
+      {hasPdf && (
+        <label className="shrink-0 flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer select-none">
+          <input type="checkbox" checked={generateAll} onChange={(e) => toggleGenerateAll(e.target.checked)}
+                 className="accent-violet-600" />
+          Generate all visualisations after the scan
+        </label>
+      )}
+      {running && generation && (
+        <div className="shrink-0 space-y-1">
+          <p className="text-xs text-violet-600">
+            Generating visualisations: {generation.done} of {generation.total}
+            {generation.failed > 0 && <span className="text-rose-600"> ({generation.failed} failed)</span>}
+          </p>
+          <div className="h-1 rounded bg-violet-100 overflow-hidden">
+            <div className="h-full bg-violet-500 transition-all"
+                 style={{ width: `${generation.total ? (100 * generation.done) / generation.total : 0}%` }} />
+          </div>
+        </div>
+      )}
+      {!running && !detecting && concepts.length > 0 && missing > 0 && (
+        <button onClick={startGenerateAll}
+                className="shrink-0 self-start text-[11px] px-2 py-0.5 rounded border border-violet-200 text-violet-700 hover:bg-violet-50">
+          Generate all ({missing} missing)
+        </button>
+      )}
       {!hasPdf && <p className="text-xs text-gray-400">This paper has no PDF to scan.</p>}
       {detecting && (
         <p className="text-xs text-violet-600 animate-pulse">
@@ -185,6 +258,9 @@ export default function ConceptsPanel({
                   </span>
                   <span className="text-xs text-gray-700 truncate">{c.label}</span>
                   {c.spec && <span title="Visualisation ready" className="ml-auto shrink-0 w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                  {!c.spec && c.spec_error && (
+                    <span title={`Generation failed: ${c.spec_error}`} className="ml-auto shrink-0 w-1.5 h-1.5 rounded-full bg-rose-500" />
+                  )}
                 </button>
               ))}
             </div>

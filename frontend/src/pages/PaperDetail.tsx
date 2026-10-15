@@ -15,7 +15,7 @@ import UploadConfirmModal from "../components/UploadConfirmModal";
 import OnboardingModal from "../components/OnboardingModal";
 import { useAppSettings } from "../contexts/SettingsContext";
 import { notify } from "../lib/notify";
-import type { Paper, Person, Topic, Tag, Reference, Figure, PaperTable, GraphData, ParsedMeta, T_IngestOut, Claim, RelatedPaper, Annotation, AnnotationColor, Concept, ConceptsBackend } from "../types";
+import type { Paper, Person, Topic, Tag, Reference, Figure, PaperTable, GraphData, ParsedMeta, T_IngestOut, Claim, RelatedPaper, Annotation, AnnotationColor, Concept, ConceptsBackend, ConceptGeneration } from "../types";
 
 const PAPER_GRAPH_NODE_COLORS: Record<string, string> = {
   paper: "#7c3aed", person: "#2563eb", topic: "#16a34a",
@@ -94,13 +94,15 @@ export default function PaperDetail() {
   // Interactive concepts (right-pane tab, marked on the PDF while that tab is open)
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [conceptsBackend, setConceptsBackend] = useState<ConceptsBackend | null>(null);
+  const [conceptGeneration, setConceptGeneration] = useState<ConceptGeneration | null>(null);
   const [activeConceptId, setActiveConceptId] = useState<string | null>(null);
   useEffect(() => {
     if (!id) return;
     setConcepts([]);
+    setConceptGeneration(null);
     setActiveConceptId(null);
     listConcepts(id)
-      .then((r) => { setConcepts(r.concepts); setConceptsBackend(r.backend); })
+      .then((r) => { setConcepts(r.concepts); setConceptsBackend(r.backend); setConceptGeneration(r.generation); })
       .catch(() => {});
   }, [id]);
   const conceptMarks: ConceptMark[] | undefined = tab === "concepts"
@@ -2551,6 +2553,8 @@ export default function PaperDetail() {
                 concepts={concepts}
                 backend={conceptsBackend}
                 onConceptsChange={setConcepts}
+                generation={conceptGeneration}
+                onGenerationChange={setConceptGeneration}
                 activeId={activeConceptId}
                 onActivate={(c) => {
                   setActiveConceptId(c?.id ?? null);

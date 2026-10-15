@@ -468,3 +468,11 @@ export interface Concept {
 }
 
 export type ConceptsBackend = "claude-code" | "api";
+
+/** Progress of the background job that generates every missing visualisation. */
+export interface ConceptGeneration {
+  total: number;
+  done: number;
+  failed: number;
+  running: boolean;
+}
