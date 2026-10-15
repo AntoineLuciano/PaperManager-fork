@@ -7,7 +7,6 @@ import re
 from pathlib import Path
 from typing import Any, Generator
 
-import httpx
 import anthropic
 from config import settings
 from services.user_ai_config import get_effective_ai_config
@@ -41,7 +40,7 @@ def _personal_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(
         api_key=api_key,
         base_url=_ANTHROPIC_BASE_URL,
-        http_client=httpx.Client(verify=_ssl_verify()),
+        http_client=anthropic.DefaultHttpxClient(verify=_ssl_verify()),
     )
 
 
@@ -53,7 +52,7 @@ def _work_client() -> anthropic.Anthropic:
         raise ValueError("Work Anthropic key is not configured for this user.")
     work_kwargs: dict[str, Any] = {
         "api_key": work_key,
-        "http_client": httpx.Client(verify=_ssl_verify()),
+        "http_client": anthropic.DefaultHttpxClient(verify=_ssl_verify()),
     }
     work_base = (cfg.get("anthropic_work_base_url") or "").strip()
     if work_base:
@@ -621,7 +620,7 @@ def knowledge_chat_stream(
             api_key=work_key,
             base_url=work_base or None,
             default_headers={"Authorization": f"Bearer {work_key}"},
-            http_client=httpx.Client(verify=_ssl_verify()),
+            http_client=anthropic.DefaultHttpxClient(verify=_ssl_verify()),
         )
     else:
         client = _personal_client()

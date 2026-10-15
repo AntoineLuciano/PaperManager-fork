@@ -135,7 +135,6 @@ def chat_with_figure(paper_id: str, figure_id: str, body: FigureChatRequest):
     """Ask Claude a question about a specific figure image (vision)."""
     from config import settings
     import anthropic
-    import httpx
 
     driver = get_driver()
     fig = get_figure(driver, figure_id)
@@ -183,7 +182,7 @@ def chat_with_figure(paper_id: str, figure_id: str, body: FigureChatRequest):
             client = anthropic.Anthropic(
                 api_key=work_key,
                 base_url=work_base or None,
-                http_client=httpx.Client(verify=_ssl_verify()),
+                http_client=anthropic.DefaultHttpxClient(verify=_ssl_verify()),
             )
         else:
             if not personal_key:
