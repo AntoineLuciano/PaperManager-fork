@@ -1,6 +1,15 @@
 # PaperManager Documentation
 
-**PaperManager** is a personal academic paper manager. Upload PDFs, ingest papers from URLs, chat with papers using AI, explore a knowledge graph of authors and topics, and track references — all in a local web app backed by Neo4j and Google Drive.
+**PaperManager** is a self-hosted second brain for research papers. Upload PDFs or paste links,
+and it extracts metadata, summaries, figures and references, visualises the ideas on each page,
+builds a concept map per project, and lets you chat with your whole library, all on a Neo4j
+knowledge graph with PDFs in Google Drive.
+
+[:material-web: Project page with screenshots](https://niklas-abraham.de/projects/papermanager/){ .md-button }
+[:fontawesome-brands-github: Source on GitHub](https://github.com/NiklasAbraham/PaperManager){ .md-button }
+[:material-rocket-launch: Host your own](self_hosting.md){ .md-button .md-button--primary }
+
+![Paper view with an interactive concept visualisation](img/screenshots/concepts.webp)
 
 ---
 
