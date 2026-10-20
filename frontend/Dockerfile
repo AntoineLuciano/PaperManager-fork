@@ -12,8 +12,8 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Copy production environment file
-COPY .env.production .env
+# Use the production environment file when present (see .env.production.example)
+RUN if [ -f .env.production ]; then cp .env.production .env; fi
 
 # Build the application
 RUN npm run build

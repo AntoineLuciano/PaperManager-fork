@@ -1,6 +1,6 @@
 # Self-hosting on one machine: Neo4j + the single-container app
 # (Dockerfile.selfhost). Open http://localhost:8080. See docs/self_hosting.md.
-# The repo's docker-compose.yml is the maintainer's production stack (Traefik,
+# docker-compose.example.yml mirrors the maintainer's production stack (Traefik,
 # own domain, remote GPU host) and is not meant to be reused as is.
 services:
   neo4j:

@@ -37,7 +37,6 @@ def update_niklas_password():
     
     if success:
         print(f"✓ Password updated successfully for user '{username}'")
-        print(f"  New password: {new_password}")
     else:
         print(f"Error: Failed to update password for user '{username}'")
         sys.exit(1)

@@ -131,7 +131,7 @@ docker exec -w /app papermanager-backend-1 \
     python scripts/import_to_project.py scripts/imports/<manifest>.json [--dry-run]
 ```
 
-The manifest lives in `backend/scripts/imports/` and is the record of what was imported:
+The manifest lives in `backend/scripts/imports/` (git-ignored) and is the record of what was imported:
 
 ```json
 {"project": "MasterThesis",

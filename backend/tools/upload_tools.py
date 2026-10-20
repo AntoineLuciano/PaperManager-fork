@@ -38,7 +38,7 @@ def register(mcp: FastMCP):
 
         source is one of:
           - an absolute local PDF path under the host import root
-            (HOST_IMPORT_ROOT, e.g. /home/niklas/code/...),
+            (HOST_IMPORT_ROOT, e.g. /srv/papers/...),
           - a direct PDF URL,
           - an arXiv id ("2210.02747" or "arXiv:2210.02747"),
           - a DOI ("10.1038/..." or a doi.org URL); bioRxiv DOIs are fetched from

@@ -115,6 +115,6 @@ Write tools preview by default: `merge_papers` runs with `dry_run=true`, `delete
 a call takes a few minutes). `source` is a local PDF path, a PDF URL, an arXiv id or a DOI; the
 logic is `services/pdf_import.py`, shared with `scripts/import_to_project.py`. The MCP server runs
 inside the backend container (`docker exec`), so local paths must lie under `HOST_IMPORT_ROOT`
-(default `/home/niklas/code`), which `docker-compose.yml` bind-mounts read-only at the same path.
+(default `/srv/papers` in `docker-compose.example.yml`), which the compose file bind-mounts read-only at the same path.
 
 The MCP server uses **FastMCP**. Tool handlers are thin wrappers that call `db/queries/` functions directly — the same functions used by FastAPI routers.

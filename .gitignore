@@ -29,7 +29,6 @@ share/python-wheels/
 MANIFEST
 
 /docker-compose.yml
-/home/niklas/code/PaperManager/docker-compose.yml
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -222,3 +221,9 @@ logs/
 memory/
 .DS_Store
 backend/scripts/merge_logs/
+
+# Personal import manifests and their results
+backend/scripts/imports/
+
+# Node
+node_modules/

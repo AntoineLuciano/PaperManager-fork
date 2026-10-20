@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Deployment-specific build env (see .env.production.example)
+.env.production

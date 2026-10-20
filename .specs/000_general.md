@@ -46,7 +46,7 @@ It is built for a single primary user with optional teammate/multi-user support.
 
 ### Infrastructure
 - Dev: `start.sh` starts uvicorn (port 8000) + Vite (port 5173) + optional Ollama
-- Prod: Docker Compose — Neo4j + FastAPI + Nginx/React; Traefik reverse proxy; hosted at `niklas-abraham.de`
+- Prod: Docker Compose — Neo4j + FastAPI + Nginx/React; Traefik reverse proxy; hosted at `<your-domain>`
 
 ---
 
@@ -74,7 +74,7 @@ PaperManager/
 ├── docs/                Full documentation (MkDocs)
 ├── .specs/              This folder — developer context files
 ├── prompts/             AI prompt templates (backend reads these)
-├── docker-compose.yml   Production deployment
+├── docker-compose.example.yml   Production deployment template
 ├── start.sh             Local dev launcher
 └── .env                 Environment variables (gitignored)
 ```

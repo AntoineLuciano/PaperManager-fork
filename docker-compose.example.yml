@@ -21,10 +21,6 @@ services:
   backend:
     build: ./backend
     restart: always
-    dns:
-      - 185.12.64.1
-      - 185.12.64.2
-      - 8.8.8.8
     # Backstop so a runaway ingest can't take the host down. Steady state is well
     # under 1 GB; peak during figure extraction is a few hundred MB on top.
     mem_limit: 8g
@@ -47,11 +43,11 @@ services:
       - GOOGLE_CREDENTIALS_FILE=${GOOGLE_CREDENTIALS_FILE:-}
       - GOOGLE_TOKEN_FILE=${GOOGLE_TOKEN_FILE:-}
       - BACKEND_PORT=8000
-      - FRONTEND_URL=https://papermanager.niklas-abraham.de
+      - FRONTEND_URL=https://papermanager.example.com
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - DEFAULT_USER_NAME=${DEFAULT_USER_NAME:-niklas}
       - DEFAULT_USER_PASSWORD=${DEFAULT_USER_PASSWORD}
-      - TRUSTED_HOSTS=papermanager.niklas-abraham.de,localhost,127.0.0.1
+      - TRUSTED_HOSTS=papermanager.example.com,localhost,127.0.0.1
       - TRUST_PROXY_HEADERS=true
       - SSL_VERIFY=${SSL_VERIFY:-true}
       - SSL_CA_BUNDLE=${SSL_CA_BUNDLE:-}
@@ -76,7 +72,7 @@ services:
       - RATE_LIMIT_AUTH_PATHS=${RATE_LIMIT_AUTH_PATHS:-/auth/login,/auth/register,/auth/admin/create-user}
       # Host directory the MCP upload_pdf tool may read PDFs from, mounted read-only
       # at the same path so host paths work unchanged inside the container.
-      - HOST_IMPORT_ROOT=${HOST_IMPORT_ROOT:-/home/niklas/code}
+      - HOST_IMPORT_ROOT=${HOST_IMPORT_ROOT:-/srv/papers}
     depends_on:
       - neo4j
     networks:
@@ -85,7 +81,7 @@ services:
       - ./backend:/app
       - ./prompts:/prompts
       - backend_data:/data
-      - ${HOST_IMPORT_ROOT:-/home/niklas/code}:${HOST_IMPORT_ROOT:-/home/niklas/code}:ro
+      - ${HOST_IMPORT_ROOT:-/srv/papers}:${HOST_IMPORT_ROOT:-/srv/papers}:ro
 
   frontend:
     build:
@@ -100,7 +96,7 @@ services:
     labels:
       - "traefik.enable=true"
       # HTTPS router
-      - "traefik.http.routers.papermanager.rule=Host(`papermanager.niklas-abraham.de`)"
+      - "traefik.http.routers.papermanager.rule=Host(`papermanager.example.com`)"
       - "traefik.http.routers.papermanager.entrypoints=websecure"
       - "traefik.http.routers.papermanager.tls=true"
       - "traefik.http.routers.papermanager.tls.certresolver=letsencrypt"

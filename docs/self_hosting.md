@@ -6,7 +6,7 @@ your own computer (localhost) or on Heroku. Both use the same container image,
 serves both from one port. The login cookie only works when the page and the API come from the
 same origin, so they share that port.
 
-The repository's `docker-compose.yml` is the maintainer's production stack (Traefik, his domain,
+`docker-compose.example.yml` mirrors the maintainer's production stack (Traefik, his domain,
 a remote GPU machine). Don't use it. Use `docker-compose.selfhost.yml` or `heroku.yml`.
 
 ## What you need

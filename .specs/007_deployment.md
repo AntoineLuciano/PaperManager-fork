@@ -2,7 +2,7 @@
 
 PaperManager is deployed as a Docker Compose stack behind a Traefik reverse proxy.
 
-**Production URL:** `https://niklas-abraham.de`
+**Production URL:** `https://<your-domain>`
 
 ---
 
@@ -14,7 +14,7 @@ PaperManager is deployed as a Docker Compose stack behind a Traefik reverse prox
 | `backend` | built from `backend/Dockerfile` | FastAPI on port 8000; internal only |
 | `frontend` | built from `frontend/Dockerfile` | Nginx serving React build; exposed via Traefik on port 80 |
 
-Traefik (running separately on the `proxy` network) handles SSL (Let's Encrypt) and routes `niklas-abraham.de` → frontend Nginx, and `/api` → backend.
+Traefik (running separately on the `proxy` network) handles SSL (Let's Encrypt) and routes `<your-domain>` → frontend Nginx, and `/api` → backend.
 
 ---
 
@@ -22,7 +22,7 @@ Traefik (running separately on the `proxy` network) handles SSL (Let's Encrypt) 
 
 - Docker and Docker Compose installed
 - Traefik running and attached to the `proxy` network
-- Domain `niklas-abraham.de` pointing to the server
+- Domain `<your-domain>` pointing to the server
 
 ---
 
@@ -62,9 +62,9 @@ docker-compose ps
 
 ### 3. Verify
 
-- Frontend: `https://niklas-abraham.de`
-- Health: `https://niklas-abraham.de/health`
-- API docs: `https://niklas-abraham.de/docs`
+- Frontend: `https://<your-domain>`
+- Health: `https://<your-domain>/health`
+- API docs: `https://<your-domain>/docs`
 
 ### 4. Initial Data Setup
 

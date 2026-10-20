@@ -117,7 +117,7 @@ flowchart LR
 !!! note "PDF upload via MCP"
     `upload_pdf(source, project)` runs one paper through the full upload pipeline. `source` is a
     local PDF path, a PDF URL, an arXiv id or a DOI. Local paths must lie under `HOST_IMPORT_ROOT`
-    (default `/home/niklas/code`), which is mounted read-only into the backend container.
+    (e.g. `/srv/papers`), which is mounted read-only into the backend container.
 
 ---
 
