@@ -7,70 +7,93 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def create_or_link_reference(driver: Driver, citing_paper_id: str, ref: dict) -> dict:
+def _find_existing_reference(session, doi: str | None, title: str) -> dict | None:
+    """The paper a reference points to, if the library already has it.
+
+    Looks up every spelling of the DOI / arXiv id first (``arXiv:X`` and
+    ``10.48550/arXiv.X`` are one paper), then the title ignoring case and
+    punctuation. A title match must not carry a different DOI. PDF-backed
+    papers win over stubs.
     """
-    MERGE a Paper node for the reference (by DOI if available, else title),
-    then create a CITES relationship from the citing paper.
-    Returns the reference paper node.
+    from services.duplicate_scan import _dois_compatible, doi_variants, normalize_title
+
+    if doi:
+        rec = session.run(
+            """
+            MATCH (ref:Paper) WHERE ref.doi IN $variants
+            RETURN ref ORDER BY CASE WHEN ref.drive_file_id IS NULL THEN 1 ELSE 0 END LIMIT 1
+            """,
+            variants=doi_variants(doi),
+        ).single()
+        if rec:
+            return dict(rec["ref"])
+    key = normalize_title(title)
+    if len(key.split()) < 3:
+        return None
+    # Cheap pre-filter on the first word, exact comparison in Python.
+    first = key.split()[0]
+    rows = session.run(
+        """
+        MATCH (ref:Paper) WHERE toLower(ref.title) CONTAINS $first
+        RETURN ref ORDER BY CASE WHEN ref.drive_file_id IS NULL THEN 1 ELSE 0 END
+        """,
+        first=first,
+    )
+    for r in rows:
+        cand = dict(r["ref"])
+        if normalize_title(cand.get("title")) == key and _dois_compatible(cand, {"doi": doi}):
+            return cand
+    return None
+
+
+def create_or_link_reference(driver: Driver, citing_paper_id: str, ref: dict) -> tuple[dict, bool]:
     """
-    ref_id = str(uuid.uuid4())
+    Link the citing paper to the reference with CITES, creating a stub Paper
+    only when no existing paper matches (see _find_existing_reference).
+    Returns (reference paper node, whether it was created).
+    """
     doi = ref.get("doi") or ref.get("arxiv_id")
+    title = (ref.get("title") or "").strip()
 
     with driver.session() as session:
-        if doi:
-            # Merge by DOI so we don't duplicate known papers
-            result = session.run(
+        existing = _find_existing_reference(session, doi, title)
+        if existing:
+            record = session.run(
                 """
-                MERGE (ref:Paper {doi: $doi})
-                ON CREATE SET
-                  ref.id = $id,
-                  ref.title = $title,
-                  ref.year = $year,
-                  ref.created_at = $now,
-                  ref.updated_at = $now
-                ON MATCH SET
-                  ref.title = CASE WHEN ref.title IS NULL OR ref.title = ''
-                               THEN $title ELSE ref.title END,
-                  ref.year = CASE WHEN ref.year IS NULL THEN $year ELSE ref.year END,
-                  ref.updated_at = $now
-                WITH ref
-                MATCH (citing:Paper {id: $citing_id})
+                MATCH (ref:Paper {id: $ref_id}), (citing:Paper {id: $citing_id})
+                WHERE ref <> citing
+                SET ref.title = CASE WHEN coalesce(ref.title, '') = '' THEN $title ELSE ref.title END,
+                    ref.year = coalesce(ref.year, $year),
+                    ref.doi = coalesce(ref.doi, $doi)
                 MERGE (citing)-[:CITES]->(ref)
                 RETURN ref
                 """,
+                ref_id=existing["id"],
+                citing_id=citing_paper_id,
+                title=title,
+                year=ref.get("year"),
                 doi=doi,
-                id=ref_id,
-                title=ref.get("title", ""),
-                year=ref.get("year"),
-                now=_now(),
-                citing_id=citing_paper_id,
-            )
-        else:
-            # Fall back to merge by title (case-insensitive)
-            result = session.run(
-                """
-                MERGE (ref:Paper {title: $title})
-                ON CREATE SET
-                  ref.id = $id,
-                  ref.year = $year,
-                  ref.created_at = $now,
-                  ref.updated_at = $now
-                ON MATCH SET
-                  ref.year = CASE WHEN ref.year IS NULL THEN $year ELSE ref.year END,
-                  ref.updated_at = $now
-                WITH ref
-                MATCH (citing:Paper {id: $citing_id})
-                MERGE (citing)-[:CITES]->(ref)
-                RETURN ref
-                """,
-                title=ref.get("title", ""),
-                id=ref_id,
-                year=ref.get("year"),
-                now=_now(),
-                citing_id=citing_paper_id,
-            )
-        record = result.single()
-        return dict(record["ref"]) if record else {}
+            ).single()
+            return (dict(record["ref"]) if record else {}), False
+        if not doi and not title:
+            return {}, False
+        now = _now()
+        record = session.run(
+            """
+            MATCH (citing:Paper {id: $citing_id})
+            CREATE (ref:Paper {id: $id, title: $title, year: $year, created_at: $now, updated_at: $now})
+            SET ref.doi = $doi
+            MERGE (citing)-[:CITES]->(ref)
+            RETURN ref
+            """,
+            citing_id=citing_paper_id,
+            id=str(uuid.uuid4()),
+            title=title,
+            year=ref.get("year"),
+            doi=doi,
+            now=now,
+        ).single()
+        return (dict(record["ref"]) if record else {}), True
 
 
 def get_references(driver: Driver, paper_id: str) -> list[dict]:

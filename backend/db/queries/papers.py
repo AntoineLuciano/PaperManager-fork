@@ -155,13 +155,21 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def clean_doi_value(doi: str | None) -> str | None:
+    """Drop text glued after a DOI by PDF headers ("10.64898/2026.08.20.745880doi:")."""
+    if not doi:
+        return doi
+    doi = re.sub(r"(?i)\s*doi:?\s*$", "", str(doi).strip()).rstrip(".,;")
+    return doi or None
+
+
 def merge_paper_by_doi(driver: Driver, data: dict) -> dict:
     """
     MERGE by DOI if present (enriches an existing reference stub),
     otherwise fall back to a plain CREATE.
     Returns the paper node dict.
     """
-    doi = data.get("doi")
+    doi = data["doi"] = clean_doi_value(data.get("doi"))
     if not doi:
         return create_paper(driver, data)
 
@@ -222,7 +230,7 @@ def create_paper(driver: Driver, data: dict) -> dict:
         "id": paper_id,
         "title": data.get("title", ""),
         "year": data.get("year"),
-        "doi": data.get("doi"),
+        "doi": clean_doi_value(data.get("doi")),
         "abstract": data.get("abstract"),
         "summary": data.get("summary"),
         "drive_file_id": data.get("drive_file_id"),
@@ -293,6 +301,8 @@ def list_papers(driver: Driver, skip: int = 0, limit: int = 10000) -> list[dict]
 
 def update_paper(driver: Driver, paper_id: str, data: dict) -> dict | None:
     data["updated_at"] = _now()
+    if data.get("doi"):
+        data["doi"] = clean_doi_value(data["doi"])
     with driver.session() as session:
         result = session.run(
             """

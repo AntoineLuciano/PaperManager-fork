@@ -1557,9 +1557,11 @@ def save_references(paper_id: str, body: ReferencesBody):
     driver = get_driver()
     saved = []
     for ref in body.references:
-        node = create_or_link_reference(driver, paper_id, ref)
+        node, created = create_or_link_reference(driver, paper_id, ref)
         if node:
-            tag_paper(driver, node["id"], "from-references")
+            # Only stubs this call created are citation stubs; an existing paper keeps its tags.
+            if created:
+                tag_paper(driver, node["id"], "from-references")
             saved.append(node)
     return {"saved": len(saved)}
 

@@ -214,7 +214,11 @@ def _dois_compatible(a: dict, b: dict) -> bool:
 
 
 def _numbers(t: str) -> list[str]:
-    """Arabic and Roman numerals: "Round XIII" and "Round XV" are two papers."""
+    """Arabic and Roman numerals: "Round XIII" and "Round XV" are two papers.
+
+    "16x16" and "16 × 16" (normalised to "16 16") give the same numbers.
+    """
+    t = re.sub(r"(\d)x(\d)", r"\1 \2", t)
     return re.findall(r"\b(\d+|[ivxlc]{2,}|[ivx])\b", t)
 
 
