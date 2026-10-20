@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     # model (nomic-embed-text 404s), so calling it just wastes ~1s per upload
     # and logs an error. Set to a valid model id to re-enable.
     litellm_embed_model: str = ""
+    # Map new project papers into the project concept map with Gemma in the background.
+    concept_map_auto: bool = True
 
     # Optional Semantic Scholar API key: raises the shared anonymous rate limit
     # that otherwise 429s reference lookups during bulk imports.

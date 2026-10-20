@@ -470,6 +470,13 @@ export default function Projects() {
                     ↓ Chats
                   </a>
 
+                  <Link
+                    to={`/projects/${selected.id}/map`}
+                    className="text-xs px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg hover:border-violet-300 hover:text-violet-700 transition-colors font-medium"
+                  >
+                    Concept map
+                  </Link>
+
                   {/* View in library */}
                   <Link
                     to={`/?project_id=${selected.id}`}

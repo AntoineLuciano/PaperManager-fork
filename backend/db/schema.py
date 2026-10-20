@@ -21,6 +21,8 @@ _CONSTRAINTS = [
     "CREATE CONSTRAINT claim_id_unique IF NOT EXISTS FOR (c:Claim) REQUIRE c.id IS UNIQUE",
     "CREATE CONSTRAINT table_id IF NOT EXISTS FOR (t:Table) REQUIRE t.id IS UNIQUE",
     "CREATE CONSTRAINT concept_id IF NOT EXISTS FOR (c:Concept) REQUIRE c.id IS UNIQUE",
+    "CREATE CONSTRAINT map_concept_id IF NOT EXISTS FOR (c:MapConcept) REQUIRE c.id IS UNIQUE",
+    "CREATE CONSTRAINT map_concept_key IF NOT EXISTS FOR (c:MapConcept) REQUIRE c.key IS UNIQUE",
 ]
 
 _INDEXES = [

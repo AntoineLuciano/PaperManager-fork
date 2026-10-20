@@ -1,0 +1,42 @@
+You build one paper's entry in a concept map of a research project. The map links the
+key concepts of many papers, so a concept that two papers share must get the same name in both.
+
+Concepts already in this project's map (reuse a name verbatim when the paper discusses the same
+concept, even if it calls it differently):
+{vocabulary}
+
+Paper: {title} ({year})
+Authors: {authors}
+
+{context}
+
+Return JSON only, in this shape:
+{{
+  "concepts": [
+    {{
+      "name": "short canonical name, e.g. 'Classifier-free guidance' or 'AlphaFold3'",
+      "kind": "one of: method, model, task, dataset, metric, theory, phenomenon, tool, domain",
+      "definition": "one sentence defining the concept in general, independent of this paper",
+      "abbreviations": "comma-separated abbreviations of exactly this concept the paper uses, e.g. 'CFG'; never broader terms or related models; empty string if none",
+      "in_paper": "one sentence on what this paper says or does with it",
+      "role": "one of: introduces, extends, uses, evaluates, critiques, background"
+    }}
+  ],
+  "relations": [
+    {{
+      "source": "name of a concept above",
+      "target": "name of another concept above",
+      "type": "one of: is_a, part_of, uses, extends, improves_on, alternative_to, evaluated_on, causes, addresses, related_to",
+      "evidence": "a few words from the paper supporting the link"
+    }}
+  ]
+}}
+
+Rules:
+- 6 to 15 concepts: the ideas a reader must know to understand this paper and place it in the
+  field. Skip generic words ("deep learning", "neural network", "experiment") unless the paper is
+  about them.
+- Names are noun phrases in Title case for ideas and the official spelling for named models,
+  datasets and tools. No author names, no paper titles.
+- 4 to 20 relations, only between concepts in your list, each one stated or clearly implied by
+  the paper. Read "source type target" as a sentence: "Boltz-2 extends AlphaFold3".

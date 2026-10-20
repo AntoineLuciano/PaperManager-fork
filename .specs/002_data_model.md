@@ -158,6 +158,21 @@ An idea on one PDF page that gets an interactive visualisation (Concepts tab in 
 | `spec_error` | last generation error, if any |
 | `created_at`, `updated_at` | datetime |
 
+### MapConcept
+A key concept in a project's concept map (Projects → Concept map), shared by every paper that discusses it. Extracted per paper by Gemma (`services/concept_map.py`). Not to be confused with `Concept` (one visualised idea on one PDF page).
+
+| Property | Type |
+|---|---|
+| `id` | UUID |
+| `key` | unique matching key: lower case, alphanumerics only, trailing plural dropped |
+| `name`, `kind` | display name; `method` / `model` / `task` / `dataset` / `metric` / `theory` / `phenomenon` / `tool` / `domain` |
+| `definition` | one general sentence (first paper's wins) |
+| `aliases`, `alias_keys` | single-token abbreviations (FEP, CFG) and their keys; a new concept whose key matches one joins this node |
+
+`(Paper)-[:DISCUSSES {role, in_paper}]->(MapConcept)`; role is `introduces` / `extends` / `uses` / `evaluates` / `critiques` / `background`.
+`(MapConcept)-[:CONCEPT_LINK {type, paper_id, evidence}]->(MapConcept)`, one per stating paper; type is `is_a` / `part_of` / `uses` / `extends` / `improves_on` / `alternative_to` / `evaluated_on` / `causes` / `addresses` / `related_to`.
+Paper gets `concept_map_at` (or `concept_map_error`). A MapConcept with no DISCUSSES left is deleted on the next save.
+
 ### Blog / BlogPost
 
 **Blog** — a registered RSS feed:

@@ -42,6 +42,7 @@ from routers.research_gaps import router as research_gaps_router
 from routers.venues import router as venues_router
 from routers.claims import router as claims_router
 from routers.concepts import router as concepts_router
+from routers.concept_map import router as concept_map_router
 from routers.synthesis import router as synthesis_router
 from routers.discover import router as discover_router
 from routers.author_tracker import router as author_tracker_router
@@ -68,6 +69,8 @@ async def lifespan(app: FastAPI):
     log.info("Default tags ready")
     seed_people_tags(get_driver())
     log.info("People tags ready")
+    from routers.concept_map import start_auto_mapping
+    start_auto_mapping()
     yield
     log.info("PaperManager backend shutting down")
 
@@ -179,6 +182,7 @@ app.include_router(research_gaps_router)
 app.include_router(venues_router)
 app.include_router(claims_router)
 app.include_router(concepts_router)
+app.include_router(concept_map_router)
 app.include_router(synthesis_router)
 app.include_router(discover_router)
 app.include_router(author_tracker_router)

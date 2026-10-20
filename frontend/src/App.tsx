@@ -28,6 +28,7 @@ const Graph         = lazy(() => import("./pages/Graph"));
 const Cypher        = lazy(() => import("./pages/Cypher"));
 const KnowledgeChat = lazy(() => import("./pages/KnowledgeChat"));
 const IdeogramChat  = lazy(() => import("./pages/IdeogramChat"));
+const ConceptMap    = lazy(() => import("./pages/ConceptMap"));
 
 function NavBar() {
   const { settings, update } = useAppSettings();
@@ -124,6 +125,7 @@ function AppLayout() {
                 <Route path="/paper/:id" element={<PaperDetail />} />
                 <Route path="/people" element={<People />} />
                 <Route path="/projects" element={<Projects />} />
+                <Route path="/projects/:id/map" element={<Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading concept map…</div>}><ConceptMap /></Suspense>} />
                 <Route path="/venues" element={<Venues />} />
                 <Route path="/graph"   element={<Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading graph…</div>}><Graph /></Suspense>} />
                 <Route path="/cypher" element={<Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading…</div>}><Cypher /></Suspense>} />

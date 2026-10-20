@@ -211,6 +211,17 @@ Endpoint: `POST /merge/scan`
 
 ---
 
+## Project Concept Map — `services/concept_map.py`, `routers/concept_map.py`
+
+Endpoints: `POST /projects/{id}/concept-map/build` (`{force, paper_ids}`; background job, 3 papers in parallel), `GET /projects/{id}/concept-map/status`, `GET /projects/{id}/concept-map` (papers with authors and citation counts, concepts, DISCUSSES rows, aggregated concept relations, CITES edges inside the project).
+
+- Input: title, year, authors, abstract, summary, claims (raw text only if none of these exist), plus the 250 most-used concept names already in the project so the model reuses them
+- Prompt: `prompts/concept_map.txt`
+- Model: **Gemma** via LiteLLM (240 s timeout: the proxy cold-starts)
+- Output: 6–15 concepts (name, aliases, kind, definition, role, what the paper does with it) and typed relations between them, stored as `MapConcept` / `DISCUSSES` / `CONCEPT_LINK` (see data model). Saves are serialised so two papers cannot create the same concept twice.
+- Automatic: a sweeper thread (`start_auto_mapping`, every 10 min, `CONCEPT_MAP_AUTO=false` turns it off) maps every project paper without concepts once it has a summary (or is 30 min old), whatever way it arrived; it also resumes builds a restart interrupted. Papers whose extraction timed out are retried on later sweeps, up to 3 attempts (`Paper.concept_map_attempts`); other failures wait for a manual build. At most 2 Gemma calls run at once across all projects (the proxy times out above that).
+- Frontend: `/projects/:id/map` — force graph of concepts (colour = kind, size = papers), papers (size = citations), optional authors; filters by author, year, kind, minimum papers per concept; overview list per kind.
+
 ## Prompt Templates
 
 All prompts in `prompts/` — loaded fresh on each call, edit without restarting.
@@ -230,3 +241,4 @@ All prompts in `prompts/` — loaded fresh on each call, edit without restarting
 | `chapter_chat_system.txt` | Chapter Q&A |
 | `literature_search_keywords.txt` | Default literature search keywords |
 | `merge_scan.txt` | Duplicate detection |
+| `concept_map.txt` | Project concept map |
