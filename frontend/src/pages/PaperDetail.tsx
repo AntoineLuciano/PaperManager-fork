@@ -10,6 +10,7 @@ import BookChapters from "../components/BookChapters";
 import PdfAnnotator from "../components/PdfAnnotator";
 import type { PdfAnnotatorHandle, ConceptMark } from "../components/PdfAnnotator";
 import ConceptsPanel from "../components/concepts/ConceptsPanel";
+import TourPanel, { type TourStop } from "../components/TourPanel";
 import { SpecialZoomLevel } from "@react-pdf-viewer/core";
 import UploadConfirmModal from "../components/UploadConfirmModal";
 import OnboardingModal from "../components/OnboardingModal";
@@ -39,7 +40,7 @@ interface PaperFull extends Paper {
   tags?: Tag[];
 }
 
-type RightTab = "notes" | "chat" | "highlights" | "concepts";
+type RightTab = "notes" | "chat" | "highlights" | "concepts" | "tour";
 
 export default function PaperDetail() {
   const { id } = useParams<{ id: string }>();
@@ -105,8 +106,13 @@ export default function PaperDetail() {
       .then((r) => { setConcepts(r.concepts); setConceptsBackend(r.backend); setConceptGeneration(r.generation); })
       .catch(() => {});
   }, [id]);
+  const [tourStops, setTourStops] = useState<TourStop[]>([]);
+  const [activeStop, setActiveStop] = useState<number | null>(null);
+  useEffect(() => { setTourStops([]); setActiveStop(null); }, [id]);
   const conceptMarks: ConceptMark[] | undefined = tab === "concepts"
     ? concepts.map((c) => ({ id: c.id, page: c.page, anchor: c.anchor, label: c.label, active: c.id === activeConceptId }))
+    : tab === "tour"
+    ? tourStops.map((s, i) => ({ id: `tour-${i}`, page: s.page, anchor: s.anchor, label: `${i + 1}. ${s.title}`, active: i === activeStop }))
     : undefined;
   const showPdfPage = (page: number) => {
     if (leftTab === "pdf") {
@@ -1453,7 +1459,10 @@ export default function PaperDetail() {
                 initialPage={pdfInitialPage}
                 onScaleResolved={(s) => { resolvedScale.current = s; }}
                 conceptMarks={conceptMarks}
-                onConceptClick={(cid) => { setTab("concepts"); setActiveConceptId(cid); }}
+                onConceptClick={(cid) => {
+                  if (cid.startsWith("tour-")) { setActiveStop(Number(cid.slice(5))); return; }
+                  setTab("concepts"); setActiveConceptId(cid);
+                }}
               />
             </div>
           )}
@@ -2512,7 +2521,7 @@ export default function PaperDetail() {
 
           {/* Tabs: Notes / Chat / Highlights */}
           <div className="flex border-b border-gray-100 shrink-0">
-            {(["notes", "chat", "highlights", "concepts"] as RightTab[]).map((t) => (
+            {(["notes", "chat", "highlights", "concepts", "tour"] as RightTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -2559,6 +2568,18 @@ export default function PaperDetail() {
                 onActivate={(c) => {
                   setActiveConceptId(c?.id ?? null);
                   if (c && !(leftTab === "pdf" && activeConceptId === c.id)) showPdfPage(c.page);
+                }}
+              />
+            )}
+            {tab === "tour" && id && (
+              <TourPanel
+                paperId={id}
+                hasPdf={!!paper?.drive_file_id}
+                activeIndex={activeStop}
+                onStopsChange={setTourStops}
+                onActivate={(i) => {
+                  setActiveStop(i);
+                  if (i != null && tourStops[i]) showPdfPage(tourStops[i].page);
                 }}
               />
             )}

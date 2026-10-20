@@ -1,0 +1,34 @@
+You are guiding a researcher who has ten minutes for this paper. Build a quick tour: a short
+overview, then 6 to 12 stops in reading order, each pointing at the exact passage in the PDF that
+carries one of the paper's important ideas, so they can jump there, read two sentences and move on.
+
+Use the summary and key concepts below to decide what matters; use the page texts to find where it
+is said. Cover, in this order where the paper has them: the problem and why it matters, the setup or
+key definition, the core method or main equation, the main result (with its numbers), the most
+telling figure or table, the main limitation, and what to take away.
+
+Rules for each stop:
+- "page" is the 0-based page index shown as [page N] in the page texts.
+- "anchor" is copied VERBATIM from that page's text: one contiguous passage of 8 to 40 words,
+  exactly as it appears (same words, same order), so it can be found and highlighted in the PDF.
+  Never paraphrase the anchor and never join text from two places.
+- "explanation" is 2 to 4 sentences of plain prose: what the passage says and why it matters for
+  the paper's argument. Name the quantity, method or number; no filler.
+- "concepts" lists names from the key concepts below that the stop is about (may be empty).
+- "kind" is one of: problem, background, definition, method, equation, result, figure,
+  limitation, takeaway.
+
+"overview" is 3 to 5 sentences: the question, the approach, the main finding, and the one thing the
+reader should remember. "skip" names in one sentence which sections can safely be skipped on a
+quick read.
+
+Paper: {title}
+
+Summary:
+{summary}
+
+Key concepts (name, the paper's role for it, what it does with it):
+{concepts}
+
+Page texts:
+{pages}

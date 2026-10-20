@@ -43,6 +43,7 @@ from routers.venues import router as venues_router
 from routers.claims import router as claims_router
 from routers.concepts import router as concepts_router
 from routers.concept_map import router as concept_map_router
+from routers.paper_tour import router as paper_tour_router
 from routers.synthesis import router as synthesis_router
 from routers.discover import router as discover_router
 from routers.author_tracker import router as author_tracker_router
@@ -183,6 +184,7 @@ app.include_router(venues_router)
 app.include_router(claims_router)
 app.include_router(concepts_router)
 app.include_router(concept_map_router)
+app.include_router(paper_tour_router)
 app.include_router(synthesis_router)
 app.include_router(discover_router)
 app.include_router(author_tracker_router)

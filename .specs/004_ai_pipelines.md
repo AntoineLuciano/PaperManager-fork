@@ -222,6 +222,16 @@ Endpoints: `POST /projects/{id}/concept-map/build` (`{force, paper_ids}`; backgr
 - Automatic: a sweeper thread (`start_auto_mapping`, every 10 min, `CONCEPT_MAP_AUTO=false` turns it off) maps every project paper without concepts once it has a summary (or is 30 min old), whatever way it arrived; it also resumes builds a restart interrupted. Papers whose extraction timed out are retried on later sweeps, up to 3 attempts (`Paper.concept_map_attempts`); other failures wait for a manual build. At most 2 Gemma calls run at once across all projects (the proxy times out above that).
 - Frontend: `/projects/:id/map` — force graph of concepts (colour = kind, size = papers), papers (size = citations), optional authors; filters by author, year, kind, minimum papers per concept; overview list per kind.
 
+## Quick Tour — `services/paper_tour.py`, `routers/paper_tour.py`
+
+Endpoints: `POST /papers/{id}/tour` (background; 503 when the subscription is not set up), `GET /papers/{id}/tour` (cached tour, running flag, last error).
+
+- Input: stored summary, the paper's `MapConcept`s (role + what it does with them), pypdf page texts (≤ 60 pages × 5,000 chars)
+- Prompt: `prompts/paper_tour.txt`
+- Model: **Sonnet via Claude Code on the subscription only** (`CLAUDE_CODE_OAUTH_TOKEN` + `CLAUDE_CODE_USERS`); no API-key fallback by design
+- Output: overview, what to skip, 6–12 stops `{page, title, kind, anchor (verbatim), explanation, concepts}`; anchors are re-located in the page texts (`anchor_found`). Stored as `Paper.tour_json` / `tour_at`.
+- Frontend: Tour tab in the paper view; stops are drawn as PDF marks (same mechanism as Concepts), ← / → step through them.
+
 ## Prompt Templates
 
 All prompts in `prompts/` — loaded fresh on each call, edit without restarting.
@@ -242,3 +252,4 @@ All prompts in `prompts/` — loaded fresh on each call, edit without restarting
 | `literature_search_keywords.txt` | Default literature search keywords |
 | `merge_scan.txt` | Duplicate detection |
 | `concept_map.txt` | Project concept map |
+| `paper_tour.txt` | Quick tour of a paper |
