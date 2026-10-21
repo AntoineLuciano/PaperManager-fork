@@ -1,29 +1,92 @@
 """Knowledge Chat — cross-library graph-aware chat with SSE streaming."""
 from __future__ import annotations
+import contextvars
 import json
 import logging
 import re
+import threading
 from typing import Any, Generator
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from db.connection import get_driver
 from db.queries.conversations import (
     create_conversation, add_message, list_conversations,
     get_messages, compact_conversation, compact_conversation_sliding_window,
-    delete_conversation, get_paper_context_snippets,
+    delete_conversation, get_paper_context_snippets, get_message,
+    set_message_concepts, fork_conversation, rename_conversation,
+    set_branch_label_if_empty, set_message_error,
 )
 from models.schemas import KnowledgeChatRequest, ConversationOut, MessageOut
 from services.ai import knowledge_chat_stream, estimate_tokens, summarize_paper, CONTEXT_WINDOW
+from services.auth import get_current_user
 
 log = logging.getLogger(__name__)
-router = APIRouter(prefix="/knowledge-chat", tags=["knowledge-chat"])
+router = APIRouter(prefix="/knowledge-chat", tags=["knowledge-chat"], dependencies=[Depends(get_current_user)])
 
 # ── SSE helpers ────────────────────────────────────────────────────────────────
 
 def _sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
+
+
+_HEARTBEAT_S = 15
+_MAX_SILENCE_S = 600
+_END = object()
+
+
+def _with_heartbeat(events, every: float = _HEARTBEAT_S, max_silence: float = _MAX_SILENCE_S):
+    """Yield *events*, and ``None`` whenever none arrived for *every* seconds.
+
+    After *max_silence* seconds without an event the model is taken to be stuck
+    and ``TimeoutError`` is raised, so the chat shows an error instead of
+    waiting forever.
+
+    The model can think or run tools for minutes without a token; the proxies in
+    front of the backend close a response that stays silent for a minute. The
+    caller turns ``None`` into an SSE comment, which keeps the stream open and is
+    ignored by the browser. The producer runs in a thread with the request's
+    context (the current user decides the model routing).
+    """
+    import queue
+
+    q: queue.Queue = queue.Queue()
+
+    def produce() -> None:
+        try:
+            for ev in events:
+                q.put(ev)
+        except Exception as exc:  # re-raised in the consumer
+            q.put(exc)
+        finally:
+            q.put(_END)
+
+    ctx = contextvars.copy_context()
+    threading.Thread(target=ctx.run, args=(produce,), daemon=True).start()
+    return _drain(q, every, max_silence)
+
+
+def _drain(q, every: float, max_silence: float):
+    import queue
+
+    silent = 0.0
+    while True:
+        try:
+            item = q.get(timeout=every)
+        except queue.Empty:
+            silent += every
+            if silent >= max_silence:
+                raise TimeoutError(f"The model sent nothing for {int(max_silence // 60)} minutes; try again.")
+            yield None
+            continue
+        silent = 0.0
+        if item is _END:
+            return
+        if isinstance(item, Exception):
+            raise item
+        yield item
 
 
 # ── @mention parsing ──────────────────────────────────────────────────────────
@@ -63,7 +126,7 @@ def _fetch_papers_for_mention(
     if mention_type == "tag":
         cypher = (
             "MATCH (p:Paper)-[:TAGGED]->(:Tag {name: $val}) "
-            "RETURN p.id AS id, p.title AS title, p.abstract AS abstract, p.summary AS summary "
+            "RETURN p.id AS id, p.title AS title, p.year AS year, p.abstract AS abstract, p.summary AS summary "
             "LIMIT 20"
         )
         desc = f"Fetching papers tagged '{value}'"
@@ -73,13 +136,13 @@ def _fetch_papers_for_mention(
         cypher = (
             "MATCH (p:Paper)-[:ABOUT]->(:Topic) WHERE toLower(t.name) CONTAINS $val "
             "WITH p LIMIT 20 "
-            "RETURN p.id AS id, p.title AS title, p.abstract AS abstract, p.summary AS summary"
+            "RETURN p.id AS id, p.title AS title, p.year AS year, p.abstract AS abstract, p.summary AS summary"
         )
         # Simpler approach: exact name match first, then fallback to contains
         cypher = (
             "MATCH (p:Paper)-[:ABOUT]->(t:Topic) "
             "WHERE toLower(t.name) CONTAINS $val "
-            "RETURN p.id AS id, p.title AS title, p.abstract AS abstract, p.summary AS summary "
+            "RETURN p.id AS id, p.title AS title, p.year AS year, p.abstract AS abstract, p.summary AS summary "
             "LIMIT 20"
         )
         desc = f"Fetching papers about topic '{value}'"
@@ -89,7 +152,7 @@ def _fetch_papers_for_mention(
         cypher = (
             "MATCH (p:Paper)-[:IN_PROJECT]->(proj:Project) "
             "WHERE toLower(proj.name) CONTAINS $val "
-            "RETURN p.id AS id, p.title AS title, p.abstract AS abstract, p.summary AS summary "
+            "RETURN p.id AS id, p.title AS title, p.year AS year, p.abstract AS abstract, p.summary AS summary "
             "LIMIT 30"
         )
         desc = f"Fetching papers in project '{value}'"
@@ -99,7 +162,7 @@ def _fetch_papers_for_mention(
         cypher = (
             "MATCH (p:Paper) "
             "WHERE toLower(p.title) CONTAINS $val "
-            "RETURN p.id AS id, p.title AS title, p.abstract AS abstract, p.summary AS summary "
+            "RETURN p.id AS id, p.title AS title, p.year AS year, p.abstract AS abstract, p.summary AS summary "
             "LIMIT 5"
         )
         desc = f"Fetching paper matching '{value}'"
@@ -123,7 +186,7 @@ def _fetch_papers_for_mention(
             "MATCH (paper:Paper)-[:AUTHORED_BY|INVOLVES]->(person:Person) "
             "WHERE (person)-[:TAGGED]->(:Tag {name: $val}) "
             "   OR toLower(person.name) CONTAINS $name_val "
-            "RETURN DISTINCT paper.id AS id, paper.title AS title, "
+            "RETURN DISTINCT paper.id AS id, paper.title AS title, paper.year AS year, "
             "       paper.abstract AS abstract, paper.summary AS summary "
             "LIMIT 30"
         )
@@ -157,7 +220,7 @@ def _fallback_all_papers(session, question: str = "") -> list[dict]:
                 "YIELD node AS p, score "
                 "WHERE score > 0.55 "
                 "AND NOT (p)-[:TAGGED]->(:Tag {name: 'from-references'}) "
-                "RETURN p.id AS id, p.title AS title, p.abstract AS abstract, p.summary AS summary "
+                "RETURN p.id AS id, p.title AS title, p.year AS year, p.abstract AS abstract, p.summary AS summary "
                 "ORDER BY score DESC",
                 emb=emb,
             )
@@ -170,7 +233,7 @@ def _fallback_all_papers(session, question: str = "") -> list[dict]:
     # Recency fallback — fills gaps when vector index is cold or sparse
     cypher_papers = (
         "MATCH (p:Paper) WHERE NOT (p)-[:TAGGED]->(:Tag {name: 'from-references'}) "
-        "RETURN p.id AS id, p.title AS title, p.abstract AS abstract, p.summary AS summary "
+        "RETURN p.id AS id, p.title AS title, p.year AS year, p.abstract AS abstract, p.summary AS summary "
         "ORDER BY p.created_at DESC LIMIT 10"
     )
     for r in session.run(cypher_papers):
@@ -217,13 +280,29 @@ def _stream(body: KnowledgeChatRequest) -> Generator[str, None, None]:
         else:
             yield _sse({
                 "type": "step",
-                "description": "No @mentions — using hybrid retrieval (semantic + recency) for context",
+                "description": "No scope given: choosing papers by semantic search and recency",
                 "cypher": None,
                 "count": None,
             })
             papers = _fallback_all_papers(session, question=body.question)
             for p in papers:
                 papers_by_id[p["id"]] = p
+
+    # Papers attached in the composer always come first, whatever the mentions found.
+    if body.paper_ids:
+        with driver.session() as session:
+            attached = [dict(r) for r in session.run(
+                "UNWIND $ids AS pid MATCH (p:Paper {id: pid}) "
+                "RETURN p.id AS id, p.title AS title, p.year AS year, p.abstract AS abstract, p.summary AS summary",
+                ids=body.paper_ids[:20],
+            )]
+        yield _sse({"type": "step", "kind": "attach", "description": "Adding the papers you attached",
+                    "cypher": None, "count": len(attached),
+                    "papers": [{"id": p["id"], "title": p["title"], "year": p.get("year")} for p in attached]})
+        for p in attached:
+            p["_attached"] = True
+        rest = {k: v for k, v in papers_by_id.items() if k not in {p["id"] for p in attached}}
+        papers_by_id = {p["id"]: p for p in attached} | rest
 
     all_papers = list(papers_by_id.values())
 
@@ -268,6 +347,8 @@ def _stream(body: KnowledgeChatRequest) -> Generator[str, None, None]:
         paper_infos.append({
             "id": p["id"],
             "title": p.get("title") or "Untitled",
+            "year": p.get("year"),
+            "attached": bool(p.get("_attached")),
             "tokens": tok,
             "color": _PAPER_COLORS[i % len(_PAPER_COLORS)],
             "has_note": bool(p.get("_note")),
@@ -298,38 +379,46 @@ def _stream(body: KnowledgeChatRequest) -> Generator[str, None, None]:
         conv_id = conv["id"]
 
     paper_ids = [p["id"] for p in all_papers]
-    add_message(driver, conv_id, "user", body.question, paper_ids, question_tokens)
+    user_msg = add_message(driver, conv_id, "user", body.question, paper_ids, question_tokens)
+    set_branch_label_if_empty(driver, conv_id, body.question[:80])
 
-    # Step 5: stream Claude response (agentic — may yield step + token events)
+    def answer() -> Generator[dict, None, None]:
+        """Model call and save in one producer: it runs to the end even if the
+        browser disconnects, so a dropped connection never loses the answer
+        (the page then finds it by polling the conversation)."""
+        full_answer = ""
+        try:
+            for event in knowledge_chat_stream(
+                question=body.question,
+                history=[{"role": m.role, "content": m.content} for m in body.history],
+                papers=all_papers,
+                model=body.model,
+                use_web=body.use_web,
+                driver=driver,
+            ):
+                if event.get("type") == "token":
+                    full_answer += event.get("text", "")
+                yield event
+        except Exception as exc:
+            log.error("knowledge_chat_stream error | %s", exc)
+            set_message_error(driver, user_msg["id"], str(exc)[:1000])
+            yield {"type": "error", "message": str(exc)}
+            return
+        # Step 6: save assistant message and emit done
+        msg = add_message(driver, conv_id, "assistant", full_answer, paper_ids, estimate_tokens(full_answer))
+        yield {"type": "done", "conversation_id": conv_id, "message_id": msg["id"]}
+
+    # The producer starts now, before anything else is sent: from here on the
+    # answer is written and saved whether or not the browser stays connected.
+    events = _with_heartbeat(answer())
+    yield _sse({"type": "conversation", "conversation_id": conv_id, "user_message_id": user_msg["id"]})
     yield _sse({"type": "step", "description": "Sending to Claude…", "cypher": None, "count": None})
-
-    full_answer = ""
     try:
-        for event in knowledge_chat_stream(
-            question=body.question,
-            history=[{"role": m.role, "content": m.content} for m in body.history],
-            papers=all_papers,
-            model=body.model,
-            use_web=body.use_web,
-            driver=driver,
-        ):
-            if event.get("type") == "token":
-                full_answer += event.get("text", "")
-            yield _sse(event)
-    except Exception as exc:
-        log.error("knowledge_chat_stream error | %s", exc)
+        for event in events:
+            yield ": keep-alive\n\n" if event is None else _sse(event)
+    except TimeoutError as exc:
+        set_message_error(driver, user_msg["id"], str(exc))
         yield _sse({"type": "error", "message": str(exc)})
-        return
-
-    # Step 6: save assistant message and emit done
-    answer_tokens = estimate_tokens(full_answer)
-    msg = add_message(driver, conv_id, "assistant", full_answer, paper_ids, answer_tokens)
-
-    yield _sse({
-        "type": "done",
-        "conversation_id": conv_id,
-        "message_id": msg["id"],
-    })
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -427,3 +516,143 @@ def compact(conv_id: str):
 @router.delete("/conversations/{conv_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_conv(conv_id: str):
     delete_conversation(get_driver(), conv_id)
+
+
+class RenameBody(BaseModel):
+    title: str
+
+
+@router.patch("/conversations/{conv_id}", response_model=ConversationOut)
+def rename_conv(conv_id: str, body: RenameBody):
+    title = body.title.strip()[:200]
+    if not title:
+        raise HTTPException(status_code=422, detail="Title must not be empty")
+    conv = rename_conversation(get_driver(), conv_id, title)
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {**conv, "message_count": 0}
+
+
+# ── Forks ("strands") ─────────────────────────────────────────────────────────
+
+class ForkBody(BaseModel):
+    # Questions to inherit (with their answers); 0 forks before the first one.
+    keep: int
+    # "strand" continues after an answer, "edit" re-asks a question differently.
+    kind: str = "strand"
+
+
+@router.post("/conversations/{conv_id}/fork", response_model=ConversationOut)
+def fork_conv(conv_id: str, body: ForkBody):
+    if body.keep < 0 or body.kind not in ("strand", "edit"):
+        raise HTTPException(status_code=422, detail="Bad fork request")
+    try:
+        return fork_conversation(get_driver(), conv_id, body.keep, body.kind)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ── Concept cards on answers ──────────────────────────────────────────────────
+# One background job per answer; the cards are stored on the Message node, so
+# the frontend polls GET .../concepts until the status leaves "running".
+
+_concept_jobs: set[str] = set()
+_concept_lock = threading.Lock()
+
+
+class ConceptsState(BaseModel):
+    status: str | None = None          # None (never run) | running | done | failed
+    error: str | None = None
+    concepts: list[dict] | None = None
+
+
+def _answer_or_404(msg_id: str) -> dict:
+    msg = get_message(get_driver(), msg_id)
+    if not msg or msg["role"] != "assistant":
+        raise HTTPException(status_code=404, detail="Answer not found")
+    return msg
+
+
+def _state(msg: dict) -> dict:
+    status_ = msg.get("concepts_status")
+    if status_ == "running" and msg["id"] not in _concept_jobs:
+        # The job died with the process (a restart); let the user start again.
+        status_, msg["concepts_error"] = "failed", "Interrupted; start it again."
+    return {"status": status_, "error": msg.get("concepts_error"), "concepts": msg.get("concepts")}
+
+
+def _run_concepts(msg: dict) -> None:
+    from services.chat_concepts import visualise_answer
+
+    driver = get_driver()
+    try:
+        cards = visualise_answer(msg["content"], title=msg.get("question", "")[:200])
+        set_message_concepts(driver, msg["id"], cards, "done")
+    except Exception as exc:
+        log.warning("Answer concepts failed for %s: %s", msg["id"], exc)
+        set_message_concepts(driver, msg["id"], None, "failed", str(exc)[:500])
+    finally:
+        with _concept_lock:
+            _concept_jobs.discard(msg["id"])
+
+
+@router.post("/messages/{msg_id}/visualise", response_model=ConceptsState)
+def visualise_answer_route(msg_id: str):
+    """Detect concepts in an answer and generate their cards in the background."""
+    msg = _answer_or_404(msg_id)
+    with _concept_lock:
+        if msg_id in _concept_jobs:
+            return _state(msg)
+        _concept_jobs.add(msg_id)
+    set_message_concepts(get_driver(), msg_id, None, "running")
+    # The request user (a contextvar) decides whether Claude Code may be used.
+    ctx = contextvars.copy_context()
+    threading.Thread(target=ctx.run, args=(_run_concepts, msg), daemon=True).start()
+    return {"status": "running", "error": None, "concepts": msg.get("concepts")}
+
+
+@router.get("/messages/{msg_id}/concepts", response_model=ConceptsState)
+def get_answer_concepts(msg_id: str):
+    return _state(_answer_or_404(msg_id))
+
+
+class RepairBody(BaseModel):
+    error: str
+
+
+@router.post("/messages/{msg_id}/concepts/{index}/repair", response_model=ConceptsState)
+def repair_answer_concept(msg_id: str, index: int, body: RepairBody):
+    """Regenerate one card whose animation or graph failed in the browser."""
+    from services.chat_concepts import repair_concept
+    from services.concepts import ConceptsError
+
+    msg = _answer_or_404(msg_id)
+    cards = list(msg.get("concepts") or [])
+    if not 0 <= index < len(cards):
+        raise HTTPException(status_code=404, detail="Concept not found")
+    try:
+        cards[index] = repair_concept(cards[index], body.error[:2000], title=msg.get("question", "")[:200])
+    except (ConceptsError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    set_message_concepts(get_driver(), msg_id, cards, "done")
+    return {"status": "done", "error": None, "concepts": cards}
+
+
+# ── 3D structures (```structure blocks) ───────────────────────────────────────
+
+@router.get("/structures")
+def get_structure(pdb: str | None = Query(None), afdb: str | None = Query(None)):
+    """Coordinates for the 3D viewer: an RCSB entry or an AlphaFold DB model, cached."""
+    from services.structures import StructureError, alphafold_model, rcsb_entry
+
+    try:
+        if pdb:
+            return rcsb_entry(pdb)
+        if afdb:
+            return alphafold_model(afdb)
+    except StructureError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # network trouble
+        log.warning("Structure fetch failed (%s / %s): %s", pdb, afdb, exc)
+        raise HTTPException(status_code=502, detail="Could not fetch the structure.")
+    raise HTTPException(status_code=422, detail="Give ?pdb=<PDB id> or ?afdb=<UniProt accession>")

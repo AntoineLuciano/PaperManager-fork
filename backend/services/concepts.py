@@ -300,12 +300,23 @@ def _clean_graph_data(spec: dict[str, Any]) -> None:
         raise ConceptsError(f"Graph data_json does not match chart_type {chart!r}.")
 
 
+def trim_sentences(text: str, limit: int) -> str:
+    """Shorten *text* to at most *limit* characters, ending on a whole sentence when one fits."""
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    end = max(cut.rfind(". "), cut.rfind("? "), cut.rfind("! "))
+    if end >= limit // 2:
+        return cut[:end + 1]
+    return cut[:limit - 1].rsplit(" ", 1)[0] + "…"
+
+
 def clean_spec(vtype: str, spec: dict[str, Any]) -> dict[str, Any]:
     """Check a generated spec against its type and trim oversized fields."""
     if spec.get("type") != vtype:
         raise ConceptsError(f"Expected a {vtype} spec, got {spec.get('type')!r}.")
     spec["title"] = normalise(str(spec.get("title") or ""))[:120]
-    spec["caption"] = normalise(str(spec.get("caption") or ""))[:400]
+    spec["caption"] = trim_sentences(normalise(str(spec.get("caption") or "")), 400)
     if vtype == "formula":
         if not str(spec.get("main_latex") or "").strip():
             raise ConceptsError("Formula spec has no main_latex.")

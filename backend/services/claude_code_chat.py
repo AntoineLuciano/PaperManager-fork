@@ -133,7 +133,7 @@ async def _run(
                 wrote_text = True
                 emit({"type": "token", "text": event["delta"]["text"]})
             elif event.get("type") == "content_block_start" and event.get("content_block", {}).get("name") == "WebSearch":
-                emit({"type": "step", "description": "Searching the web", "cypher": None, "count": None})
+                emit({"type": "step", "kind": "web", "description": "Searching the web", "cypher": None, "count": None})
         elif isinstance(message, ResultMessage) and message.is_error:
             detail = "; ".join(message.errors or []) or message.result or message.subtype
             raise RuntimeError(f"Claude Code failed: {detail}")
@@ -176,7 +176,7 @@ def knowledge_chat_claude_code(
     """Knowledge Chat on Claude Code: same events as ``knowledge_chat_stream``."""
     _require_available()
     from claude_agent_sdk import tool
-    from services.ai import CYPHER_TOOL, LOAD_FULL_TEXT_TOOL, SEMANTIC_SEARCH_TOOL, execute_library_tool
+    from services.ai import LIBRARY_TOOLS, execute_library_tool
 
     async def run(emit: Callable[[dict[str, Any]], None]) -> None:
         def library_tool(spec: dict[str, Any]):
@@ -187,7 +187,7 @@ def knowledge_chat_claude_code(
                 return {"content": [{"type": "text", "text": content}]}
             return handler
 
-        tools = [library_tool(t) for t in (CYPHER_TOOL, SEMANTIC_SEARCH_TOOL, LOAD_FULL_TEXT_TOOL)] if driver else []
+        tools = [library_tool(t) for t in LIBRARY_TOOLS] if driver else []
         await _run(system, _prompt(history, question), emit, use_web, tools)
 
     yield from _drive(run)

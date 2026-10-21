@@ -256,6 +256,8 @@ class KnowledgeChatRequest(BaseModel):
     model: str = "claude"
     conversation_id: str | None = None
     use_web: bool = True
+    # Library papers attached in the composer: always loaded into context.
+    paper_ids: list[str] = []
 
 
 class ConversationOut(BaseModel):
@@ -265,6 +267,18 @@ class ConversationOut(BaseModel):
     updated_at: str
     compacted: bool = False
     message_count: int = 0
+    # Forks ("strands"): the conversation this one was copied from, how many
+    # of its questions were inherited, and the first question asked since.
+    parent_id: str | None = None
+    fork_at: int | None = None
+    fork_kind: str | None = None
+    branch_label: str | None = None
+
+
+class MessagePaper(BaseModel):
+    id: str
+    title: str | None = None
+    year: int | None = None
 
 
 class MessageOut(BaseModel):
@@ -274,6 +288,13 @@ class MessageOut(BaseModel):
     tokens_used: int | None = None
     created_at: str
     paper_refs: list[str] = []
+    papers: list[MessagePaper] = []
+    # Concept cards generated from this answer (services/chat_concepts.py).
+    concepts: list[dict] | None = None
+    concepts_status: str | None = None
+    concepts_error: str | None = None
+    # Set on a question whose answer failed (the stream may have been lost).
+    answer_error: str | None = None
 
 
 # ── Figures ──────────────────────────────────────────────────────────────────

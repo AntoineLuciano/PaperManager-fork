@@ -376,6 +376,25 @@ LOAD_FULL_TEXT_TOOL: dict[str, Any] = {
     },
 }
 
+# Tool definition for listing a paper's extracted figures
+LIST_FIGURES_TOOL: dict[str, Any] = {
+    "name": "list_figures",
+    "description": (
+        "List the figures extracted from a paper's PDF: figure number, page, caption and "
+        "the image URL to embed in the answer as ![caption](image_url). Use it when a "
+        "figure of a library paper would show what the answer explains."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "paper_id": {"type": "string", "description": "The UUID id of the paper."},
+        },
+        "required": ["paper_id"],
+    },
+}
+
+LIBRARY_TOOLS = (CYPHER_TOOL, SEMANTIC_SEARCH_TOOL, LOAD_FULL_TEXT_TOOL, LIST_FIGURES_TOOL)
+
 # Regex to block write operations
 _CYPHER_WRITE_RE = re.compile(
     r"\b(CREATE|MERGE|SET\s+\w|DELETE|DETACH\s+DELETE|REMOVE|DROP)\b",
@@ -465,6 +484,7 @@ def execute_library_tool(name: str, args: dict[str, Any], driver: Any) -> tuple[
         rows = _run_cypher_safe(driver, query) if driver else [{"error": "No DB driver available"}]
         step = {
             "type": "step",
+            "kind": "cypher",
             "description": desc,
             "cypher": query,
             "count": len(rows) if not (len(rows) == 1 and "error" in rows[0]) else None,
@@ -500,9 +520,14 @@ def execute_library_tool(name: str, args: dict[str, Any], driver: Any) -> tuple[
             sem_rows = [{"error": "Vector search unavailable"}]
         step = {
             "type": "step",
+            "kind": "search",
             "description": desc,
             "cypher": f"[vector search] {sem_query}",
             "count": len(sem_rows) if not (len(sem_rows) == 1 and "error" in sem_rows[0]) else None,
+            "papers": [
+                {"id": r["id"], "title": r.get("title"), "year": r.get("year")}
+                for r in sem_rows if r.get("id")
+            ],
         }
         return step, json.dumps(sem_rows)
 
@@ -539,11 +564,40 @@ def execute_library_tool(name: str, args: dict[str, Any], driver: Any) -> tuple[
             tok_label = "unavailable"
         step = {
             "type": "step",
+            "kind": "fulltext",
             "description": f"Loading full text: {lft_title[:60]} ({tok_label})",
             "cypher": None,
             "count": None,
+            "papers": [{"id": lft_paper_id, "title": lft_title}] if lft_title != lft_paper_id else [],
         }
         return step, lft_content
+
+    if name == "list_figures":
+        fig_paper_id: str = args.get("paper_id", "")
+        figures: list[dict[str, Any]] = []
+        if driver and fig_paper_id:
+            from db.queries.figures import list_figures as _list_figures
+            try:
+                figures = [
+                    {
+                        "figure_number": f.get("figure_number"),
+                        "page": f.get("page_number"),
+                        "caption": (f.get("caption") or "")[:600],
+                        "image_url": f"/papers/{fig_paper_id}/figures/{f['id']}/image",
+                    }
+                    for f in _list_figures(driver, fig_paper_id)
+                    if f.get("drive_file_id")
+                ]
+            except Exception as exc:
+                log.warning("list_figures tool failed | %s", exc)
+        step = {
+            "type": "step",
+            "kind": "figures",
+            "description": f"Listing figures of a paper ({len(figures)} found)",
+            "cypher": None,
+            "count": len(figures),
+        }
+        return step, json.dumps(figures) if figures else "[No extracted figures for this paper]"
 
     return None
 
@@ -574,7 +628,9 @@ def knowledge_chat_stream(
     results are fed back into the conversation before the next call.
     """
     def _paper_block(p: dict) -> str:
-        parts = [f"### {p.get('title', 'Untitled')}"]
+        parts = [f"### {p.get('title', 'Untitled')}", f"id: {p.get('id')}" + (f" · year: {p['year']}" if p.get("year") else "")]
+        if p.get("_attached"):
+            parts.append("(attached by the user to this question)")
         if p.get("abstract"):
             parts.append(f"Abstract: {p['abstract']}")
         if p.get("summary"):
@@ -609,6 +665,19 @@ def knowledge_chat_stream(
     if web_context:
         system += f"\n\n## Recent Web Context\n{web_context}"
 
+    # ── LiteLLM (self-hosted model): one completion, no library tools ─────────
+    if model in ("litellm", "ollama"):
+        from services.litellm_client import chat_completion
+        yield {"type": "status", "text": "Asking the LiteLLM model..."}
+        text = chat_completion(
+            [{"role": "system", "content": system}, *history, {"role": "user", "content": question}],
+            timeout=300,
+        )
+        yield {"type": "status", "text": ""}
+        for i in range(0, len(text), 40):
+            yield {"type": "token", "text": text[i:i + 40]}
+        return
+
     # ── Select client ─────────────────────────────────────────────────────────
     if model == "claude-work":
         cfg = get_effective_ai_config()
@@ -637,7 +706,7 @@ def knowledge_chat_stream(
     else:
         claude_model = "claude-sonnet-4-6"
 
-    tools = [CYPHER_TOOL, SEMANTIC_SEARCH_TOOL, LOAD_FULL_TEXT_TOOL] if driver is not None else []
+    tools = list(LIBRARY_TOOLS) if driver is not None else []
 
     # ── Agentic tool-use loop (non-streaming) ─────────────────────────────────
     # Phase 1: let Claude call run_cypher / semantic_search as many times as
