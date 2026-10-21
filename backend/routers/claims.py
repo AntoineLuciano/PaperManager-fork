@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from db.connection import get_driver
@@ -15,9 +15,10 @@ from db.queries.claims import (
 )
 from db.queries.papers import get_paper
 from services.ai import extract_claims
+from services.auth import get_current_user
 
 log = logging.getLogger(__name__)
-router = APIRouter(tags=["claims"])
+router = APIRouter(tags=["claims"], dependencies=[Depends(get_current_user)])
 
 
 class ClaimOut(BaseModel):

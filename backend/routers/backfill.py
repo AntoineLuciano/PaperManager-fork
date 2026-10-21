@@ -1,12 +1,13 @@
 """Batch backfill operations — apply AI enrichment to existing papers."""
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from db.connection import get_driver
 from db.queries.papers import list_papers
 from db.queries.topics import link_paper_topic
+from services.auth import require_admin
 
 log = logging.getLogger(__name__)
-router = APIRouter(prefix="/backfill", tags=["backfill"])
+router = APIRouter(prefix="/backfill", tags=["backfill"], dependencies=[Depends(require_admin)])
 
 
 @router.post("/topics")

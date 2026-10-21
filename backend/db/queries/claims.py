@@ -80,14 +80,14 @@ def search_claims(driver, query: str, limit: int = 20) -> list[dict]:
     with driver.session() as session:
         result = session.run(
             """
-            CALL db.index.fulltext.queryNodes('claim_search', $query)
+            CALL db.index.fulltext.queryNodes('claim_search', $text)
             YIELD node AS c, score
             MATCH (p:Paper)-[:HAS_CLAIM]->(c)
             RETURN c AS claim, {id: p.id, title: p.title} AS paper
             ORDER BY score DESC
             LIMIT $limit
             """,
-            query=query,
+            text=query,
             limit=limit,
         )
         return [

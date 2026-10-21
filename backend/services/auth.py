@@ -6,7 +6,7 @@ import logging
 import re
 from jose import JWTError, jwt
 import bcrypt
-from fastapi import HTTPException, Request, Response, Security, status
+from fastapi import Depends, HTTPException, Request, Response, Security, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import secrets
 from config import settings
@@ -199,3 +199,13 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     return username
+
+
+def require_admin(current_user: str = Depends(get_current_user)) -> str:
+    """Like get_current_user, but only for admins (library-wide operations)."""
+    from db.connection import get_driver
+    from db.queries.users import is_user_admin
+
+    if not is_user_admin(get_driver(), current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    return current_user

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from db.connection import get_driver
@@ -19,10 +19,11 @@ from db.queries.people import (
 )
 from db.queries.papers import merge_paper_by_doi
 from db.queries.tags import tag_paper
+from services.auth import get_current_user
 from services.metadata_lookup import lookup_semantic_scholar
 
 log = logging.getLogger(__name__)
-router = APIRouter(tags=["author-tracker"])
+router = APIRouter(tags=["author-tracker"], dependencies=[Depends(get_current_user)])
 
 
 # ── API models ────────────────────────────────────────────────────────────────

@@ -12,16 +12,17 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, model_validator
 
 from db.connection import get_driver
 from services.duplicate_scan import CLASSES, SCAN_QUERY, scan, title_similarity, wrong_doi_suspects
+from services.auth import require_admin
 from services.paper_merge import merge_papers
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/merge", tags=["merge"])
+router = APIRouter(prefix="/merge", tags=["merge"], dependencies=[Depends(require_admin)])
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
