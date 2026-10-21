@@ -53,9 +53,11 @@ _FRONT_MATTER_CHARS = 8000
 def _clean_doi(raw: str) -> str | None:
     """Strip trailing punctuation, glued tokens, supplemental suffixes; reject truncated DOIs."""
     raw = _GLUED_TAIL_RE.sub("", raw.rstrip(".,;)")).rstrip(".,;)")
-    raw = _SUPPLEMENTAL_RE.sub("", raw)
-    suffix = raw.split("/", 1)[1] if "/" in raw else ""
-    return raw if len(suffix) >= 4 else None
+    prefix, _, suffix = raw.partition("/")
+    # Supplemental markers follow the suffix; matching them against the whole DOI
+    # read the "/s10994" of a Springer DOI (10.1007/s10994-...) as one and cut it off.
+    suffix = _SUPPLEMENTAL_RE.sub("", suffix)
+    return f"{prefix}/{suffix}" if len(suffix) >= 4 else None
 
 
 def _front_matter(text: str) -> str:

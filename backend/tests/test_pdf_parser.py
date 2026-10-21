@@ -48,8 +48,11 @@ def test_find_doi_detects_real_doi():
 
 def test_find_doi_strips_trailing_punctuation():
     doi = find_doi("Reference: 10.1007/s10994-021-05946-3.")
-    assert doi is not None
-    assert not doi.endswith(".")
+    assert doi == "10.1007/s10994-021-05946-3"
+
+
+def test_find_doi_strips_supplemental_suffix():
+    assert find_doi("doi: 10.1073/pnas.1611835114/-/DCSupplemental") == "10.1073/pnas.1611835114"
 
 
 def test_find_doi_prefers_arxiv_over_doi():
@@ -126,45 +129,42 @@ def test_extract_metadata_returns_raw_text():
     assert "Attention" in result["raw_text"]
 
 
-def test_extract_metadata_uses_api_when_doi_found():
-    """When DOI found, Semantic Scholar is tried first."""
+def test_extract_metadata_uses_llm_result_with_front_matter_doi():
+    """Layer 1: the LLM's metadata wins; the DOI found in the PDF's front matter is kept."""
     pdf_bytes = FIXTURE.read_bytes()
-    mock_result = {
+    llm_result = {
         "title": "Attention Is All You Need",
-        "authors": ["Vaswani et al."],
+        "authors": ["Ashish Vaswani", "Noam Shazeer"],
         "year": 2017,
-        "venue": "NeurIPS",
-        "abstract": "Transformer paper",
-        "doi": "arXiv:1706.03762",
-        "citation_count": 50000,
-        "topics": [],
-        "metadata_source": "semantic_scholar",
+        "abstract": "The dominant sequence transduction models are based on recurrent networks.",
+        "doi": None,
     }
-    with patch("services.pdf_parser.lookup_semantic_scholar", return_value=mock_result) as mock_ss:
+    with patch("services.pdf_parser.extract_metadata_with_llm", return_value=llm_result) as mock_llm, \
+         patch("services.pdf_parser.find_doi", return_value="arXiv:1706.03762"):
         result = extract_metadata(pdf_bytes)
-    mock_ss.assert_called_once()
+    mock_llm.assert_called_once()
     assert result["title"] == "Attention Is All You Need"
-    assert result["metadata_source"] == "semantic_scholar"
+    assert result["authors"] == ["Ashish Vaswani", "Noam Shazeer"]
+    assert result["doi"] == "arXiv:1706.03762"
+    assert "Attention" in result["raw_text"]
 
 
-def test_extract_metadata_falls_back_to_crossref():
-    """When S2 fails, Crossref is tried."""
+def test_extract_metadata_falls_back_to_heuristics_without_llm_title():
+    """Layer 2: when the LLM gives no title (or fails), heuristics fill in."""
     pdf_bytes = FIXTURE.read_bytes()
-    crossref_result = {
-        "title": "Attention Is All You Need",
-        "authors": [],
-        "year": 2017,
-        "venue": None,
-        "abstract": None,
-        "doi": "arXiv:1706.03762",
-        "citation_count": None,
-        "topics": [],
-        "metadata_source": "crossref",
-    }
-    with patch("services.pdf_parser.lookup_semantic_scholar", return_value=None), \
-         patch("services.pdf_parser.lookup_crossref", return_value=crossref_result):
-        result = extract_metadata(pdf_bytes)
-    assert result["metadata_source"] == "crossref"
+    for llm in ({"title": ""}, None, RuntimeError("LiteLLM down")):
+        kwargs = {"side_effect": llm} if isinstance(llm, Exception) else {"return_value": llm}
+        with patch("services.pdf_parser.extract_metadata_with_llm", **kwargs):
+            result = extract_metadata(pdf_bytes)
+        assert result["title"]
+        assert "Attention" in result["raw_text"]
+
+
+def test_extract_metadata_preview_skips_llm():
+    with patch("services.pdf_parser.extract_metadata_with_llm") as mock_llm:
+        result = extract_metadata(FIXTURE.read_bytes(), allow_llm=False, max_pages=1)
+    mock_llm.assert_not_called()
+    assert result["title"]
 
 
 def test_extract_metadata_bad_pdf_still_returns_dict():
