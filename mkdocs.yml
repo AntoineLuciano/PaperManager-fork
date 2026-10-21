@@ -1,6 +1,6 @@
 site_name: PaperManager
-site_description: Personal academic paper manager with AI, knowledge graph, and full-text search
-site_author: PaperManager Contributors
+site_description: A self-hosted second brain for research papers, with AI summaries, interactive concepts and a Neo4j knowledge graph
+site_author: Niklas Abraham
 site_url: https://niklasabraham.github.io/PaperManager/
 repo_url: https://github.com/NiklasAbraham/PaperManager
 repo_name: NiklasAbraham/PaperManager
@@ -8,34 +8,42 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  custom_dir: overrides
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    logo: material/book-open-page-variant
+    repo: fontawesome/brands/github
+  favicon: img/favicon.svg
   palette:
-    - scheme: default
-      primary: indigo
-      accent: indigo
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
       toggle:
-        icon: material/brightness-7
+        icon: material/weather-night
         name: Switch to dark mode
-    - scheme: slate
-      primary: indigo
-      accent: indigo
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
       toggle:
-        icon: material/brightness-4
+        icon: material/weather-sunny
         name: Switch to light mode
   features:
     - navigation.tabs
-    - navigation.tabs.sticky
     - navigation.sections
-    - navigation.expand
     - navigation.path
     - navigation.top
+    - navigation.footer
+    - navigation.instant
     - search.suggest
     - search.highlight
     - content.tabs.link
     - content.code.copy
     - content.code.annotate
     - toc.follow
-  icon:
-    repo: fontawesome/brands/github
 
 plugins:
   - search
@@ -64,26 +72,42 @@ markdown_extensions:
   - toc:
       permalink: true
 
+extra_css:
+  - stylesheets/extra.css
+
+# Old planning notes kept in the repo but not published.
+exclude_docs: |
+  tasks/
+  overview.md
+  data_model.md
+  project_structure.md
+
 nav:
   - Home: index.md
-  - User Guide:
-    - Getting Started: user-guide/getting-started.md
-    - Ingesting Papers: user-guide/ingestion.md
+  - Get started:
+    - First steps: user-guide/first-steps.md
+    - Hosting your own: self_hosting.md
+    - Local development: user-guide/getting-started.md
+  - Using PaperManager:
+    - Adding papers: user-guide/ingestion.md
     - Library: user-guide/library.md
-    - Paper Detail: user-guide/paper-detail.md
-    - Knowledge Features: user-guide/knowledge-features.md
-    - MCP Server (Claude): user-guide/mcp-server.md
-    - Hosting Your Own: self_hosting.md
-  - Technical Reference:
+    - Reading a paper: user-guide/paper-detail.md
+    - Concepts, tour and concept map: user-guide/reading-tools.md
+    - Knowledge chat and graph: user-guide/knowledge-features.md
+    - MCP server (Claude): user-guide/mcp-server.md
+  - Technical reference:
     - Architecture: technical/architecture.md
     - Backend: technical/backend.md
     - Frontend: technical/frontend.md
-    - Data Model: technical/data-model.md
-    - AI Pipelines: technical/ai-pipelines.md
-    - API Reference: technical/api-reference.md
-  - Decisions Log: decisions.md
+    - Data model: technical/data-model.md
+    - AI pipelines: technical/ai-pipelines.md
+    - Ingestion workflow: technical/ingestion-workflow.md
+    - API reference: technical/api-reference.md
+    - UI style guide: style-guide.md
+    - Decisions log: decisions.md
 
 extra:
+  generator: false
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/NiklasAbraham/PaperManager

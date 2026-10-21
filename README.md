@@ -92,11 +92,12 @@ The full docs are at **[niklasabraham.github.io/PaperManager](https://niklasabra
 
 | User guide | Technical reference |
 |---|---|
-| [Getting started](docs/user-guide/getting-started.md) | [Architecture](docs/technical/architecture.md) |
+| [First steps](docs/user-guide/first-steps.md) | [Architecture](docs/technical/architecture.md) |
 | [Ingesting papers](docs/user-guide/ingestion.md) | [Backend](docs/technical/backend.md) |
 | [Library](docs/user-guide/library.md) | [Frontend](docs/technical/frontend.md) |
 | [Paper detail](docs/user-guide/paper-detail.md) | [Data model](docs/technical/data-model.md) |
-| [Knowledge features](docs/user-guide/knowledge-features.md) | [AI pipelines](docs/technical/ai-pipelines.md) |
+| [Concepts, tour and concept map](docs/user-guide/reading-tools.md) | [AI pipelines](docs/technical/ai-pipelines.md) |
+| [Knowledge chat and graph](docs/user-guide/knowledge-features.md) | [Local development](docs/user-guide/getting-started.md) |
 | [MCP server](docs/user-guide/mcp-server.md) | [API reference](docs/technical/api-reference.md) |
 | [Hosting your own](docs/self_hosting.md) | [Decisions log](docs/decisions.md) |
 

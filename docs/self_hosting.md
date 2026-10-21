@@ -159,6 +159,9 @@ heroku run -a <app-name> python scripts/create_default_user.py
 
 The script asks for a password (at least 8 characters).
 
+Log in, then follow [First steps](user-guide/first-steps.md) to add your first paper and try
+the tour, the concept map and the chat.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

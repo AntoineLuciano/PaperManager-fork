@@ -1,151 +1,180 @@
-# PaperManager Documentation
+---
+template: home.html
+title: PaperManager
+hide:
+  - navigation
+  - toc
+---
 
-**PaperManager** is a self-hosted second brain for research papers. Upload PDFs or paste links,
-and it extracts metadata, summaries, figures and references, visualises the ideas on each page,
-builds a concept map per project, and lets you chat with your whole library, all on a Neo4j
-knowledge graph with PDFs in Google Drive.
+# PaperManager
 
-[:material-web: Project page with screenshots](https://niklas-abraham.de/projects/papermanager/){ .md-button }
-[:fontawesome-brands-github: Source on GitHub](https://github.com/NiklasAbraham/PaperManager){ .md-button }
-[:material-rocket-launch: Host your own](self_hosting.md){ .md-button .md-button--primary }
+## How it works
 
-![Paper view with an interactive concept visualisation](img/screenshots/concepts.webp)
+<div class="pm-steps" markdown>
+
+<div class="pm-step" markdown>
+<span class="pm-step__n">1</span>
+
+### Add a paper
+
+Drag in a PDF or paste an arXiv, DOI or PubMed link. The metadata is looked up for you;
+you check it and press save.
+</div>
+
+<div class="pm-step" markdown>
+<span class="pm-step__n">2</span>
+
+### PaperManager reads it
+
+In the background it writes a summary, pulls out figures, tables and references, and
+suggests topics and tags.
+</div>
+
+<div class="pm-step" markdown>
+<span class="pm-step__n">3</span>
+
+### You read, ask and connect
+
+Read the PDF with the summary, a guided tour and visual explanations beside it, then ask
+questions across everything you have read.
+</div>
+
+</div>
+
+New here? [First steps](user-guide/first-steps.md) walks through one paper from upload to
+concept map in about ten minutes.
 
 ---
 
-## ✨ What You Can Do
+## What you get
+
+<div class="pm-row" markdown>
+<div markdown>
+
+### One library for every paper
+
+Search the full text, filter by project, topic, tag, author or reading status, and see at a
+glance what is still unread.
+
+[Library :octicons-arrow-right-24:](user-guide/library.md)
+</div>
+![Library dashboard](img/screenshots/library.webp)
+</div>
+
+<div class="pm-row pm-row--flip" markdown>
+<div markdown>
+
+### Everything about a paper in one view
+
+The left side switches between the PDF, the summary, figures, tables, references and related
+papers. The right side keeps your notes, highlights and a chat about the paper open beside
+it.
+
+[Reading a paper :octicons-arrow-right-24:](user-guide/paper-detail.md)
+</div>
+![Summary next to the PDF](img/screenshots/summary.webp)
+</div>
+
+<div class="pm-row" markdown>
+<div markdown>
+
+### A guided tour through a long paper
+
+An overview, what you can skip, and 6–12 stops that jump to the passages that matter, with
+the concepts each one relies on.
+
+[Concepts, tour and concept map :octicons-arrow-right-24:](user-guide/reading-tools.md)
+</div>
+![Quick tour next to the PDF](img/screenshots/tour.webp)
+</div>
+
+<div class="pm-row pm-row--flip" markdown>
+<div markdown>
+
+### How a whole project fits together
+
+The key concepts of every paper in a project and how they relate, as a graph you can filter
+by author, year and kind of concept.
+
+[Concept map :octicons-arrow-right-24:](user-guide/reading-tools.md#concept-map)
+</div>
+![Project concept map](img/screenshots/concept-map.webp)
+</div>
+
+<div class="pm-row" markdown>
+<div markdown>
+
+### Ask your whole library
+
+The knowledge chat answers from your papers and cites them. Narrow it with `@project:`,
+`@topic:` or `@paper:`, or let it search the web too.
+
+[Knowledge chat :octicons-arrow-right-24:](user-guide/knowledge-features.md#knowledge-chat)
+</div>
+![Knowledge chat](img/screenshots/chat.webp)
+</div>
+
+---
+
+## Where to go next
 
 <div class="grid cards" markdown>
 
--   :material-file-upload: **Ingest Papers**
+-   :material-rocket-launch:{ .lg .middle } **Install it**
 
-    Upload PDFs or paste URLs/DOIs. Metadata extracted automatically from Semantic Scholar, CrossRef, arXiv, PubMed, or via local AI.
+    ---
 
-    [:octicons-arrow-right-24: Ingesting Papers](user-guide/ingestion.md)
+    Run your own instance with Docker on your computer or on Heroku, with your own
+    database and keys.
 
--   :material-bookshelf: **Browse Your Library**
+    [:octicons-arrow-right-24: Hosting your own](self_hosting.md)
 
-    Full-text search, filter by tags/topics/projects/people, sort, and switch between grid and list views.
+-   :material-school:{ .lg .middle } **Learn the app**
 
-    [:octicons-arrow-right-24: Library](user-guide/library.md)
+    ---
 
--   :material-robot: **Chat with Papers**
+    Upload a paper, read it with the tour, put it in a project and ask questions about it.
 
-    Ask questions about individual papers or across your whole library using Claude (Anthropic) or Ollama (local).
+    [:octicons-arrow-right-24: First steps](user-guide/first-steps.md)
 
-    [:octicons-arrow-right-24: Paper Detail](user-guide/paper-detail.md)
+-   :material-robot-happy:{ .lg .middle } **Use it from Claude**
 
--   :material-graph: **Knowledge Graph**
+    ---
 
-    Interactive WebGL graph showing how papers, authors, topics, projects, and notes connect.
+    The MCP server gives Claude Desktop and Claude Code 35 tools to search, read and edit
+    your library.
 
-    [:octicons-arrow-right-24: Knowledge Features](user-guide/knowledge-features.md)
+    [:octicons-arrow-right-24: MCP server](user-guide/mcp-server.md)
 
--   :material-tag-multiple: **Tags & Topics**
+-   :material-code-braces:{ .lg .middle } **Work on the code**
 
-    157 seeded tags across source, workflow, content-type, math, ML/AI, biology, and drug-discovery categories.
+    ---
 
-    [:octicons-arrow-right-24: Library Filters](user-guide/library.md#filters)
+    How the backend, frontend, graph model and AI pipelines fit together.
 
--   :material-connection: **MCP Server**
-
-    Integrate with Claude Desktop to manage your library via natural language tool calls.
-
-    [:octicons-arrow-right-24: MCP Server](user-guide/mcp-server.md)
+    [:octicons-arrow-right-24: Architecture](technical/architecture.md)
 
 </div>
 
 ---
 
-## Quick Start
-
-```bash
-# 1. Clone and enter
-git clone https://github.com/NiklasAbraham/PaperManager && cd PaperManager
-
-# 2. Create conda env
-conda create -n papermanager python=3.11 -y
-conda activate papermanager
-pip install -r backend/requirements.txt
-
-# 3. Install frontend
-cd frontend && npm install && cd ..
-
-# 4. Copy and fill in your .env
-cp .env.example .env
-# Edit .env — see Configuration section
-
-# 5. Start everything
-./start.sh
-# Opens http://localhost:5173
-```
-
-`start.sh` starts the FastAPI backend (port 8000), the Vite frontend (port 5173), and optionally Ollama. Logs go to `/tmp/papermanager-backend.log` and `/tmp/papermanager-frontend.log`.
-
----
-
-## Architecture at a Glance
+## Under the hood
 
 ```mermaid
-graph TB
-    Browser["🌐 Browser\n(React + Vite :5173)"]
-    Backend["⚙️ FastAPI Backend\n(:8000)"]
-    Neo4j["🗄️ Neo4j Aura\n(Graph DB)"]
-    Drive["📁 Google Drive\n(PDF Storage)"]
-    AI["🤖 AI Layer\nClaude / Ollama"]
-    Claude["💬 Claude Desktop\n(MCP Client)"]
-    MCP["🔌 MCP Server"]
-
-    Browser <-->|"HTTP / SSE"| Backend
-    Claude <-->|"MCP protocol"| MCP
-    MCP --> Backend
-    Backend --> Neo4j
-    Backend --> Drive
-    Backend --> AI
+graph LR
+    UI["React app"] --> API["FastAPI backend"]
+    MCP["Claude via MCP"] --> API
+    API --> DB[("Neo4j<br/>knowledge graph")]
+    API --> Drive["Google Drive<br/>PDFs and figures"]
+    API --> LLM["Claude / any<br/>OpenAI-compatible model"]
+    API --> Ext["Semantic Scholar<br/>CrossRef · arXiv"]
 ```
 
-See [Architecture](technical/architecture.md) for full technical detail.
+Every paper, author, topic, project, note and concept is a node in one Neo4j graph, so the
+same data powers the library, the chat, the concept map and the Cypher editor. PDFs stay in
+your own Google Drive. More in [Architecture](technical/architecture.md).
 
----
-
-## Documentation Map
-
-### User Guide
-
-| Section | What it covers |
-|---|---|
-| [Getting Started](user-guide/getting-started.md) | Installation, configuration, first run |
-| [Ingesting Papers](user-guide/ingestion.md) | PDF upload, URL/DOI ingest, bulk import |
-| [Library](user-guide/library.md) | Browsing, searching, filtering, sorting |
-| [Paper Detail](user-guide/paper-detail.md) | Metadata, PDF viewer, figures, notes, chat, references |
-| [Knowledge Features](user-guide/knowledge-features.md) | Graph, knowledge chat, Cypher editor |
-| [MCP Server](user-guide/mcp-server.md) | Claude Desktop integration |
-
-### Technical Reference
-
-| Section | What it covers |
-|---|---|
-| [Architecture](technical/architecture.md) | System design and module interaction diagrams |
-| [Backend](technical/backend.md) | FastAPI routers, services, DB queries |
-| [Frontend](technical/frontend.md) | React pages and components |
-| [Data Model](technical/data-model.md) | Neo4j graph schema |
-| [AI Pipelines](technical/ai-pipelines.md) | Metadata extraction, summarisation, chat, embeddings |
-| [Ingestion Workflow](technical/ingestion-workflow.md) | Staged PDF upload flow in detail |
-| [API Reference](technical/api-reference.md) | All REST endpoints |
-| [Decisions Log](decisions.md) | Architecture decision record |
-
-### Developer Context (`.specs/`)
-
-Detailed spec files for contributors and AI assistants working on the codebase live in [`.specs/`](../.specs/):
-
-| File | Contents |
-|---|---|
-| [000_general.md](../.specs/000_general.md) | Overview, tech stack, quick start |
-| [001_architecture.md](../.specs/001_architecture.md) | Module map, design decisions |
-| [002_data_model.md](../.specs/002_data_model.md) | Full graph schema |
-| [003_ingestion.md](../.specs/003_ingestion.md) | All ingestion workflows |
-| [004_ai_pipelines.md](../.specs/004_ai_pipelines.md) | All AI models and pipelines |
-| [005_knowledge_chat.md](../.specs/005_knowledge_chat.md) | Knowledge chat pipeline in depth |
-| [006_api.md](../.specs/006_api.md) | Complete API reference |
-| [007_deployment.md](../.specs/007_deployment.md) | Docker / production deployment |
-| [008_mcp_server.md](../.specs/008_mcp_server.md) | MCP server setup and tools |
+PaperManager is open source. The project page at
+[niklas-abraham.de](https://niklas-abraham.de/projects/papermanager/) has the story behind
+it; issues and pull requests are welcome on
+[GitHub](https://github.com/NiklasAbraham/PaperManager).

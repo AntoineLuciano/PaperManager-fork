@@ -1,4 +1,8 @@
-# Getting Started
+# Local development
+
+This page sets PaperManager up from source, with the backend and frontend running directly on
+your machine so code changes show up immediately. To simply **use** PaperManager, the Docker
+setup in [Hosting your own](../self_hosting.md) is quicker.
 
 ## Prerequisites
 
@@ -6,7 +10,7 @@
 |-------------|---------|-------|
 | Python | 3.11+ | Use conda or pyenv |
 | Node.js | 18+ | For the frontend |
-| Neo4j Aura | Free tier | Cloud-hosted graph DB |
+| Neo4j | 5.x | Local Docker container (below) or a free AuraDB instance |
 | Google account | — | Google Drive for PDF storage |
 | Anthropic API key | — | Claude for summaries & chat |
 | Ollama (optional) | latest | Local AI for metadata extraction |
@@ -67,7 +71,7 @@ Edit `.env`:
 
 ```env
 # ── Neo4j ──────────────────────────────────────────────────────
-NEO4J_URI=neo4j+s://xxxx.databases.neo4j.io
+NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your-password
 
@@ -96,11 +100,18 @@ SSL_VERIFY=true
 SSL_CA_BUNDLE=/path/to/corporate-ca.pem
 ```
 
-### Neo4j Aura setup
+### Neo4j setup
 
-1. Go to [https://neo4j.com/cloud/platform/aura-graph-database/](https://neo4j.com/cloud/platform/aura-graph-database/)
-2. Create a free AuraDB instance
-3. Copy the connection URI, username, and password into `.env`
+The quickest option is a local container:
+
+```bash
+docker run -d --name papermanager-neo4j -p 7687:7687 -p 7474:7474 \
+  -e NEO4J_AUTH=neo4j/change-me neo4j:5
+```
+
+Then set `NEO4J_URI=bolt://localhost:7687`, `NEO4J_USER=neo4j` and `NEO4J_PASSWORD=change-me`
+in `.env`. A free [AuraDB](https://console.neo4j.io) instance works too: copy its
+`neo4j+s://` URI and credentials instead.
 
 ### Google Drive setup
 
@@ -149,6 +160,7 @@ You should see the library page with a drop zone and a **+** button to add paper
 
 ## What's Next?
 
+- [First steps](first-steps.md) — one paper from upload to concept map
 - [Ingest your first paper](ingestion.md) — drag a PDF or paste a URL
 - [Browse the library](library.md) — search, filter, sort your papers
 - [Chat with a paper](paper-detail.md#chat-with-paper) — ask Claude questions about any paper

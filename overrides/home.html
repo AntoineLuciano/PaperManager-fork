@@ -1,0 +1,32 @@
+{% extends "main.html" %}
+
+{#- Docs home: a full-width hero under the tabs; the page body follows. -#}
+{% block tabs %}
+  {{ super() }}
+  <section class="pm-hero">
+    <div class="md-grid pm-hero__inner">
+      <div class="pm-hero__text">
+        <p class="pm-hero__eyebrow">Open source · self-hosted · your own keys</p>
+        <h1>A second brain for research papers</h1>
+        <p class="pm-hero__lede">
+          Drop in a PDF. PaperManager finds the metadata, writes a summary, pulls out figures and
+          references, explains the ideas on each page, and connects every paper in your library
+          in one knowledge graph you can search and chat with.
+        </p>
+        <div class="pm-hero__ctas">
+          <a href="{{ 'self_hosting/' | url }}" class="md-button md-button--primary">Install it</a>
+          <a href="{{ 'user-guide/first-steps/' | url }}" class="md-button">Take the 10-minute tour</a>
+          <a href="https://github.com/NiklasAbraham/PaperManager" class="md-button pm-hero__ghost">GitHub</a>
+        </div>
+      </div>
+      <figure class="pm-hero__shot">
+        <img src="{{ 'img/screenshots/concepts.webp' | url }}" width="1600" height="1000"
+             alt="The paper view: the PDF on the left, an animated visualisation of an equation from page 2 on the right">
+      </figure>
+    </div>
+  </section>
+{% endblock %}
+
+{% block content %}
+  <div class="pm-home">{{ super() }}</div>
+{% endblock %}

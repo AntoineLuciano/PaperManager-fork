@@ -1,7 +1,7 @@
 # PaperManager — UI Style Guide
 
 > **Single source of truth for all frontend styling decisions.**
-> Tokens are defined in [`frontend/src/index.css`](../frontend/src/index.css) via Tailwind v4 `@theme`.
+> Tokens are defined in [`frontend/src/index.css`](https://github.com/NiklasAbraham/PaperManager/blob/main/frontend/src/index.css) via Tailwind v4 `@theme`.
 > When in doubt, use a semantic token instead of a raw Tailwind color.
 
 ---
