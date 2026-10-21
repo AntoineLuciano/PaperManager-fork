@@ -388,8 +388,7 @@ def upload(
     for topic_name in meta.get("topics", []):
         if not topic_name:
             continue
-        topic = get_or_create_topic(driver, topic_name)
-        link_paper_topic(driver, paper["id"], topic["id"])
+        link_paper_topic(driver, paper["id"], topic_name)  # takes the name; creates the topic
         topics_added.append(topic_name)
 
     # Step 8b: AI topic suggestion (best-effort, supplements Semantic Scholar topics)
@@ -607,8 +606,7 @@ def ingest_from_url(body: IngestFromUrlBody, x_user_name: Optional[str] = Header
     for topic_name in meta.get("topics", []):
         if not topic_name:
             continue
-        topic = get_or_create_topic(driver, topic_name)
-        link_paper_topic(driver, paper["id"], topic["id"])
+        link_paper_topic(driver, paper["id"], topic_name)  # takes the name; creates the topic
         topics_added.append(topic_name)
 
     # AI topic suggestion (best-effort)
@@ -757,8 +755,7 @@ async def ingest_from_url_full(body: IngestFromUrlBody, x_user_name: Optional[st
         for topic_name in merged.get("topics", []):
             if not topic_name:
                 continue
-            topic = get_or_create_topic(driver, topic_name)
-            link_paper_topic(driver, paper["id"], topic["id"])
+            link_paper_topic(driver, paper["id"], topic_name)  # takes the name; creates the topic
             topics_added.append(topic_name)
         try:
             ai_topics = suggest_topics(title=merged.get("title", ""), abstract=merged.get("abstract", "") or "", summary=summary or "")
@@ -853,8 +850,7 @@ async def ingest_from_url_full(body: IngestFromUrlBody, x_user_name: Optional[st
         for topic_name in meta.get("topics", []):
             if not topic_name:
                 continue
-            topic = get_or_create_topic(driver, topic_name)
-            link_paper_topic(driver, paper["id"], topic["id"])
+            link_paper_topic(driver, paper["id"], topic_name)  # takes the name; creates the topic
             topics_added.append(topic_name)
         try:
             ai_topics = suggest_topics(title=meta.get("title", ""), abstract=meta.get("abstract", "") or "", summary=summary or "")

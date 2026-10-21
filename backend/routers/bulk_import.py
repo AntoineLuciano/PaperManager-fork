@@ -112,8 +112,7 @@ def _process_entry(driver, entry: BulkEntry, project_id: str | None, fetch_pdf: 
     # Link topics from metadata source
     for topic_name in meta.get("topics", []):
         if topic_name:
-            topic = get_or_create_topic(driver, topic_name)
-            link_paper_topic(driver, paper["id"], topic["id"])
+            link_paper_topic(driver, paper["id"], topic_name)  # takes the name; creates the topic
 
     # AI topic suggestion (best-effort)
     try:

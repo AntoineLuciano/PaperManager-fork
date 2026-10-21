@@ -35,6 +35,22 @@ def _make_mock_meta(**overrides):
     return base
 
 
+@pytest.fixture(autouse=True)
+def offline_pipeline(request):
+    """Keep the upload's best-effort network steps (S2 references, LiteLLM claims,
+    topics and affiliations, Docling figures) offline in the unit tests; each one used to
+    make a real request, and the references step retried Semantic Scholar for ~20 s."""
+    if request.node.get_closest_marker("integration"):
+        yield
+        return
+    with patch("routers.papers.extract_references", return_value=[]), \
+         patch("routers.papers.extract_claims", return_value=[]), \
+         patch("routers.papers.suggest_topics", return_value=[]), \
+         patch("routers.papers.extract_affiliations_with_litellm", return_value={}), \
+         patch("routers.papers.extract_figures", return_value={"figures": [], "tables": []}):
+        yield
+
+
 # ── unit tests (mocked) ───────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -138,11 +154,9 @@ async def test_upload_authors_and_topics_in_response():
          patch("routers.papers.summarize_paper", return_value="Summary"), \
          patch("routers.papers.get_or_create_person") as mock_person, \
          patch("routers.papers.link_author"), \
-         patch("routers.papers.get_or_create_topic") as mock_topic, \
-         patch("routers.papers.link_paper_topic"):
+         patch("routers.papers.link_paper_topic") as mock_link_topic:
 
         mock_person.side_effect = lambda d, name: {"id": "p", "name": name}
-        mock_topic.side_effect = lambda d, name: {"id": "t", "name": name}
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.post(
@@ -153,6 +167,9 @@ async def test_upload_authors_and_topics_in_response():
     data = r.json()
     assert "Ashish Vaswani" in data["authors"]
     assert "Natural Language Processing" in data["topics_auto_added"]
+    # link_paper_topic takes the topic *name* (passing the id created Topics named by UUID)
+    linked = [c.args[2] for c in mock_link_topic.call_args_list]
+    assert linked == ["Natural Language Processing", "Machine Learning"]
     delete_paper(get_driver(), data["id"])
 
 
@@ -165,12 +182,14 @@ async def test_upload_enriches_existing_stub_without_pdf_in_place():
         "doi": None,
         "drive_file_id": None,
         "metadata_source": "from-references",
+        "created_at": "2024-01-01T00:00:00+00:00",
     }
     updated_stub = {
         "id": "stub-1",
         "title": "Existing Stub Title",
         "doi": None,
         "drive_file_id": "drive-stub",
+        "created_at": "2024-01-01T00:00:00+00:00",
     }
 
     with patch("routers.papers.extract_metadata", return_value=meta), \

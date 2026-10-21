@@ -1,15 +1,15 @@
 """
 Tests for the search endpoint and db.queries.search.
 
-Integration tests create real Neo4j data — mark with @pytest.mark.integration.
+Most tests create real data in the (throwaway) test Neo4j.
 """
 import pytest
 from httpx import AsyncClient, ASGITransport
 from main import app
 from db.connection import get_driver
 from db.queries.papers import create_paper, delete_paper
-from db.queries.tags import get_or_create_tag, tag_paper
-from db.queries.topics import get_or_create_topic, link_paper_topic
+from db.queries.tags import tag_paper
+from db.queries.topics import link_paper_topic
 from db.queries.search import _fulltext_search
 
 
@@ -62,9 +62,8 @@ async def test_search_no_results_returns_empty_list():
     assert r.json()["total"] == 0
 
 
-# ── integration tests ─────────────────────────────────────────────────────────
+# ── Neo4j tests ───────────────────────────────────────────────────────────────
 
-@pytest.mark.integration
 async def test_fulltext_search_by_title(three_papers):
     p1, p2, p3 = three_papers
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -75,7 +74,6 @@ async def test_fulltext_search_by_title(three_papers):
     assert p2["id"] not in ids
 
 
-@pytest.mark.integration
 async def test_fulltext_search_by_summary(three_papers):
     p1, p2, p3 = three_papers
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -84,12 +82,10 @@ async def test_fulltext_search_by_summary(three_papers):
     assert p2["id"] in ids
 
 
-@pytest.mark.integration
 async def test_filter_by_tag(three_papers):
     p1, p2, p3 = three_papers
     driver = get_driver()
-    tag = get_or_create_tag(driver, "arxiv-search-test")
-    tag_paper(driver, p1["id"], tag["id"])
+    tag_paper(driver, p1["id"], "arxiv-search-test")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/search", params={"tag": "arxiv-search-test"})
@@ -99,12 +95,10 @@ async def test_filter_by_tag(three_papers):
     assert p2["id"] not in ids
 
 
-@pytest.mark.integration
 async def test_filter_by_topic(three_papers):
     p1, p2, p3 = three_papers
     driver = get_driver()
-    topic = get_or_create_topic(driver, "TestTopicSearch")
-    link_paper_topic(driver, p2["id"], topic["id"])
+    link_paper_topic(driver, p2["id"], "TestTopicSearch")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/search", params={"topic": "TestTopicSearch"})
@@ -114,15 +108,12 @@ async def test_filter_by_topic(three_papers):
     assert p3["id"] not in ids
 
 
-@pytest.mark.integration
 async def test_combined_q_and_tag(three_papers):
     """Full-text match AND tag filter — intersection."""
     p1, p2, p3 = three_papers
     driver = get_driver()
-    tag = get_or_create_tag(driver, "combo-test-tag")
-    # Tag p1 (Transformer) but not p2 (GNN, also has "deep" in abstract if we add)
-    tag_paper(driver, p1["id"], tag["id"])
-    tag_paper(driver, p2["id"], tag["id"])
+    tag_paper(driver, p1["id"], "combo-test-tag")
+    tag_paper(driver, p2["id"], "combo-test-tag")
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         # "Transformer" only matches p1; tag="combo-test-tag" matches p1 and p2
@@ -134,7 +125,6 @@ async def test_combined_q_and_tag(three_papers):
     assert p2["id"] not in ids
 
 
-@pytest.mark.integration
 async def test_search_note_content(three_papers):
     """Notes are searchable via note_search fulltext index."""
     from db.queries.notes import upsert_note
