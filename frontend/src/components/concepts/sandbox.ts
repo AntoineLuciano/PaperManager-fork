@@ -25,6 +25,10 @@ export function buildSandboxDoc(): string {
   var canvas = document.getElementById("c");
   var ctx = canvas.getContext("2d");
   var raf = 0, failed = false;
+  // Playback speed set by the card's controls (0 = paused, 0.5, 1, 2). The animation sees a
+  // virtual clock: time and dt advance by real seconds times speed, so every spec slows, speeds
+  // up and pauses without knowing about it. A paused card keeps its last frame.
+  var speed = 1, vt = 0;
   function report(where, e) {
     if (failed) return;
     failed = true;
@@ -39,6 +43,11 @@ export function buildSandboxDoc(): string {
   }
   window.addEventListener("resize", size);
   window.addEventListener("message", function (ev) {
+    if (ev.data && ev.data.type === "concept-anim-speed") {
+      var v = Number(ev.data.speed);
+      speed = isFinite(v) ? Math.max(0, Math.min(v, 4)) : 1;
+      return;
+    }
     if (!ev.data || ev.data.type !== "concept-anim-run") return;
     cancelAnimationFrame(raf);
     failed = false;
@@ -50,11 +59,18 @@ export function buildSandboxDoc(): string {
       if (!ret || typeof ret.draw !== "function") throw new Error("setup_code did not return { draw }");
       draw = ret.draw;
     } catch (e) { report("at setup", e); return; }
-    var t0 = performance.now(), last = t0;
+    var last = performance.now(), first = true;
+    vt = 0;
     function tick(now) {
-      try { draw(ctx, innerWidth, innerHeight, (now - t0) / 1000, (now - last) / 1000); }
-      catch (e) { report("mid-frame", e); return; }
+      // rAF timestamps can predate the start, so real dt is clamped at 0 (time never goes negative).
+      var dt = Math.max(0, (now - last) / 1000) * speed;
       last = now;
+      if (speed > 0 || first) {
+        vt += dt;
+        try { draw(ctx, innerWidth, innerHeight, vt, dt); }
+        catch (e) { report("mid-frame", e); return; }
+        first = false;
+      }
       raf = requestAnimationFrame(tick);
     }
     raf = requestAnimationFrame(tick);

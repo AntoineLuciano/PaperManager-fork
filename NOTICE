@@ -9,3 +9,14 @@ https://www.apache.org/licenses/LICENSE-2.0
 Changes: prompts rewritten for research papers; the "3d" renderer dropped;
 graphs carry data instead of code; model-written animation code runs in a
 sandboxed iframe instead of the page; Python backend on Neo4j.
+
+The same concept views render concept cards in Knowledge Chat
+(frontend/src/components/kchat/), where the concept pipeline also runs on
+chat answers (backend/services/chat_concepts.py).
+
+3Dmol.js (https://3dmol.csb.pitt.edu, https://github.com/3dmol/3Dmol.js),
+Copyright (c) 2014, University of Pittsburgh and contributors, licensed under
+the BSD 3-Clause License, is vendored unmodified in
+frontend/public/vendor/3dmol/ (its licence, including the notices of the code
+it incorporates, is in frontend/public/vendor/3dmol/LICENSE). It renders the
+3D structure cards in Knowledge Chat.

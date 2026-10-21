@@ -752,18 +752,50 @@ export async function deleteConversation(id: string): Promise<void> {
   await apiFetch(`/knowledge-chat/conversations/${id}`, { method: "DELETE" });
 }
 
+export async function renameConversation(id: string, title: string): Promise<Conversation> {
+  return apiFetch(`/knowledge-chat/conversations/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }),
+  });
+}
+
+/** Copy a conversation up to the answer of question `keep` (1-based); 0 forks before the first. */
+export async function forkConversation(id: string, keep: number, kind: "strand" | "edit"): Promise<Conversation> {
+  return apiFetch(`/knowledge-chat/conversations/${id}/fork`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keep, kind }),
+  });
+}
+
+export async function visualiseAnswer(messageId: string): Promise<import("../types").ChatConceptsState> {
+  return apiFetch(`/knowledge-chat/messages/${messageId}/visualise`, { method: "POST" });
+}
+
+export async function getAnswerConcepts(messageId: string): Promise<import("../types").ChatConceptsState> {
+  return apiFetch(`/knowledge-chat/messages/${messageId}/concepts`);
+}
+
+export async function repairAnswerConcept(messageId: string, index: number, error: string): Promise<import("../types").ChatConceptsState> {
+  return apiFetch(`/knowledge-chat/messages/${messageId}/concepts/${index}/repair`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error }),
+  });
+}
+
+/** Absolute URL of a backend path (figure images and PDFs embedded in chat answers). */
+export const apiUrl = (path: string) => `${BASE}${path}`;
+
 export async function* streamKnowledgeChat(body: {
   question: string;
   history: { role: string; content: string }[];
   model: string;
   conversation_id?: string;
   use_web?: boolean;
-}): AsyncGenerator<SseEvent> {
+  paper_ids?: string[];
+}, signal?: AbortSignal): AsyncGenerator<SseEvent> {
   const res = await fetch(`${BASE}/knowledge-chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     credentials: CREDENTIALS,
+    signal,
   });
   if (!res.ok || !res.body) throw new Error(`API ${res.status}`);
 

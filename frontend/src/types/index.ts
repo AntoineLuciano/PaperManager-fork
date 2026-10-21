@@ -191,7 +191,32 @@ export interface Conversation {
   compacted: boolean;
   message_count: number;
   started_by?: string;
+  /** Knowledge Chat forks: the conversation this was copied from and how many questions it inherited. */
+  parent_id?: string | null;
+  fork_at?: number | null;
+  fork_kind?: "strand" | "edit" | null;
+  branch_label?: string | null;
 }
+
+/** A concept card generated from a chat answer (backend/services/chat_concepts.py). */
+export interface ChatConcept {
+  label: string;
+  type: ConceptType;
+  /** Index of the answer's `## ` section it explains (see components/kchat/sections.ts). */
+  section: number;
+  anchor: string;
+  context: string;
+  spec: ConceptSpec | null;
+  error: string | null;
+}
+
+export interface ChatConceptsState {
+  status: "running" | "done" | "failed" | null;
+  error: string | null;
+  concepts: ChatConcept[] | null;
+}
+
+export interface MessagePaper { id: string; title?: string | null; year?: number | null }
 
 export interface KnowledgeMessage {
   id: string;
@@ -200,6 +225,12 @@ export interface KnowledgeMessage {
   tokens_used?: number;
   created_at: string;
   paper_refs: string[];
+  papers?: MessagePaper[];
+  concepts?: ChatConcept[] | null;
+  concepts_status?: ChatConceptsState["status"];
+  concepts_error?: string | null;
+  /** On a question whose answer failed. */
+  answer_error?: string | null;
 }
 
 export interface ContextPaper {
@@ -207,6 +238,8 @@ export interface ContextPaper {
   title: string;
   tokens: number;
   color: string;
+  year?: number | null;
+  attached?: boolean;
 }
 
 export interface TokenTotals {
@@ -218,9 +251,13 @@ export interface TokenTotals {
   limit: number;
 }
 
+export type StepKind = "cypher" | "search" | "fulltext" | "figures" | "web" | "attach";
+
 export type SseEvent =
-  | { type: "step"; description: string; cypher?: string; count?: number }
+  | { type: "step"; kind?: StepKind; description: string; cypher?: string | null; count?: number | null; papers?: MessagePaper[] }
+  | { type: "status"; text: string }
   | { type: "context"; papers: ContextPaper[]; token_totals: TokenTotals }
+  | { type: "conversation"; conversation_id: string; user_message_id: string }
   | { type: "token"; text: string }
   | { type: "done"; conversation_id: string; message_id: string }
   | { type: "error"; message: string };
