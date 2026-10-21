@@ -17,7 +17,7 @@ DB="$RUN_ID-neo4j"
 PASSWORD="testpassword"
 
 cleanup() {
-  docker rm -f "$DB" >/dev/null 2>&1 || true
+  docker rm -f -v "$DB" >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -29,10 +29,10 @@ docker run -d --name "$DB" --network "$NET" -e NEO4J_AUTH="neo4j/$PASSWORD" neo4
 
 echo "Waiting for the test Neo4j…"
 for _ in $(seq 1 60); do
-  if docker exec "$DB" cypher-shell -u neo4j -p "$PASSWORD" "RETURN 1" >/dev/null 2>&1; then break; fi
+  if docker exec "$DB" cypher-shell -u neo4j -p "$PASSWORD" -d neo4j "RETURN 1" >/dev/null 2>&1; then break; fi
   sleep 2
 done
-docker exec "$DB" cypher-shell -u neo4j -p "$PASSWORD" "RETURN 1" >/dev/null
+docker exec "$DB" cypher-shell -u neo4j -p "$PASSWORD" -d neo4j "RETURN 1" >/dev/null
 
 # Default: everything except tests that call real external services (Drive, Anthropic, ...).
 ARGS=("$@")

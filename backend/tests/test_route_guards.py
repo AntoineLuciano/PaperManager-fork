@@ -111,3 +111,45 @@ def test_app_pages_sharing_an_api_prefix_reload_as_the_app():
     clashing = {p for p in pages if _proxied(p, prefixes, regexes)}
     assert clashing, "expected app pages such as /projects to share a prefix with the API"
     assert not clashing - spa_listed, f"add to the $spa_page map: {sorted(clashing - spa_listed)}"
+
+
+# ── global login requirement ────────────────────────────────────────────────────
+
+@pytest.fixture
+def login_required(monkeypatch):
+    from config import settings
+
+    monkeypatch.setattr(settings, "require_login", True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/papers?limit=1", "/search?q=x", "/people", "/tags", "/stats", "/graph", "/projects"])
+async def test_anonymous_requests_are_refused(login_required, path):
+    async with _client() as c:
+        r = await c.get(path)
+    assert r.status_code == 401, (path, r.status_code)
+
+
+@pytest.mark.asyncio
+async def test_anonymous_writes_are_refused(login_required):
+    async with _client() as c:
+        r = await c.delete("/projects/some-id")
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_public_paths_stay_open(login_required):
+    async with _client() as c:
+        assert (await c.get("/health")).status_code == 200
+        assert (await c.post("/auth/login", json={})).status_code == 422  # reaches the endpoint
+        assert (await c.options("/papers")).status_code != 401
+
+
+@pytest.mark.asyncio
+async def test_valid_session_passes(login_required):
+    token = create_access_token({"sub": "someone"})
+    async with _client() as c:
+        r = await c.get("/no-such-route", headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 404  # past the login check
+        c.cookies.set("access_token", "not-a-jwt")
+        assert (await c.get("/papers")).status_code == 401

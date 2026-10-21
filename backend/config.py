@@ -13,6 +13,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # Every endpoint except login, logout, health and the API docs needs a valid session.
+    # Only the test suite turns this off (tests/conftest.py).
+    require_login: bool = True
+
     # Neo4j
     neo4j_uri: str = ""
     neo4j_user: str = "neo4j"

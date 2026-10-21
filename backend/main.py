@@ -121,6 +121,31 @@ class Neo4jReconnectMiddleware(BaseHTTPMiddleware):
 app.add_middleware(Neo4jReconnectMiddleware)
 
 
+# Paths an anonymous browser may call: the login flow, health checks and the API docs.
+PUBLIC_PATHS = {"/health", "/auth/login", "/auth/logout", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
+
+
+class RequireLoginMiddleware(BaseHTTPMiddleware):
+    """Refuse every other request without a valid session.
+
+    Routers check the user one by one, and many read endpoints only filter by visibility,
+    which lets an anonymous caller see every paper outside a project. This closes the
+    whole API in one place.
+    """
+    async def dispatch(self, request: Request, call_next):
+        if (
+            settings.require_login
+            and request.method != "OPTIONS"
+            and request.url.path not in PUBLIC_PATHS
+            and not extract_user_from_request(request)
+        ):
+            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
+        return await call_next(request)
+
+
+app.add_middleware(RequireLoginMiddleware)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add defensive response headers for browser clients."""
 

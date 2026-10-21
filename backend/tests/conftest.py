@@ -9,6 +9,9 @@ import os
 # host here before main/config is imported. setdefault keeps any real
 # environment override (e.g. CI) intact.
 os.environ.setdefault("TRUSTED_HOSTS", "localhost,127.0.0.1,test,testserver")
+# Most endpoint tests call the API without a session; test_route_guards.py turns the
+# login requirement back on for its own checks.
+os.environ.setdefault("REQUIRE_LOGIN", "false")
 
 
 # Many tests create and delete real nodes through get_driver(). Run against anything but a
