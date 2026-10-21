@@ -1,6 +1,6 @@
 ---
 template: home.html
-title: PaperManager
+title: A second brain for research papers
 hide:
   - navigation
   - toc
