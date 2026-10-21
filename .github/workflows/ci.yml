@@ -7,14 +7,17 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Runs the real DB queries against a live Neo4j 5 so Cypher syntax errors and
-  # version incompatibilities fail the build. A mocked driver cannot catch these
-  # — the bug that motivated this job (a PATCH /papers query missing the `WITH`
-  # required between SET and MATCH in Neo4j 5) returned HTTP 500 in production
-  # but passed every unit test.
-  backend-cypher:
-    name: Backend · Cypher regression (Neo4j 5)
+  # The whole backend suite except @integration tests (those call real external
+  # services: Anthropic, Google Drive, ...), against a live Neo4j 5. Running the real
+  # queries is what catches Cypher syntax errors and version incompatibilities a mocked
+  # driver cannot — the bug that first motivated this job (a PATCH /papers query missing
+  # the `WITH` required between SET and MATCH in Neo4j 5) returned HTTP 500 in
+  # production but passed every unit test. Same run as backend/scripts/run_tests.sh.
+  backend-tests:
+    name: Backend · tests (Neo4j 5)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     services:
       neo4j:
         image: neo4j:5.15
@@ -22,7 +25,6 @@ jobs:
           NEO4J_AUTH: neo4j/testpassword
         ports:
           - 7687:7687
-          - 7474:7474
         options: >-
           --health-cmd "cypher-shell -u neo4j -p testpassword 'RETURN 1'"
           --health-interval 15s
@@ -34,20 +36,25 @@ jobs:
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: testpassword
       JWT_SECRET_KEY: test-secret
+      DEFAULT_USER_NAME: testuser
       DEFAULT_USER_PASSWORD: test-password
+      CONCEPT_MAP_AUTO: 'false'
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
           cache: pip
-          cache-dependency-path: backend/requirements-test.txt
+          cache-dependency-path: backend/requirements.txt
 
-      - name: Install test dependencies
-        run: pip install -r backend/requirements-test.txt
+      # CPU torch first (as in backend/Dockerfile), so docling does not pull the CUDA wheels.
+      - name: Install dependencies
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.12.1 torchvision==0.27.1
+          pip install -r backend/requirements.txt
 
-      # Fail loudly (rather than letting the tests skip) if Neo4j never came up,
+      # Fail loudly (rather than letting database tests skip) if Neo4j never came up,
       # so the job can never go green without actually exercising the database.
       - name: Wait for Neo4j to accept connections
         run: |
@@ -67,9 +74,9 @@ jobs:
           sys.exit(1)
           PY
 
-      - name: Run Cypher regression tests
+      - name: Run backend tests
         working-directory: backend
-        run: python -m pytest tests/test_cypher_regression.py -m integration -v
+        run: python -m pytest -m "not integration" -q
 
   backend-e2e-mock:
     name: Backend · E2E mock tests (no services)
