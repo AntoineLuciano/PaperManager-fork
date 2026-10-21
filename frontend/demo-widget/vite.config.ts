@@ -5,15 +5,15 @@
  *   npx vite build --config demo-widget/vite.config.ts      (from frontend/)
  *   demo-widget/build.sh <target dir>                        (build and copy)
  *
- * Output (demo-widget/dist): pm-chat-demo.js (a small loader, no React), chunks/ (the app,
- * loaded when the widget nears the viewport), fonts/ (KaTeX), vendor/3Dmol-min.js (BSD-3).
+ * Two builds: the browser bundle (demo-widget/dist: pm-chat-demo.js, a small loader; chunks/,
+ * the live cards; fonts/ for KaTeX; vendor/3Dmol-min.js, BSD-3) and the prerender (dist-ssr),
+ * which writes the demo as static HTML for the host page (see prerender.tsx and build.sh).
  * Nothing is fetched from another host. Embed with
  *
- *   <div data-pm-chat-demo="/path/to/data/"></div>
+ *   <div data-pm-chat-demo="/path/to/data/">…fragment.html…</div>
  *   <script type="module" src="/path/to/pm-chat-demo.js"></script>
  *
- * where the data directory holds manifest.json, one JSON per conversation and
- * structures/*.json.gz, as written by export_demo.py.
+ * where the data directory holds cards/ (stills of the cards) and structures/*.json.gz.
  */
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -68,14 +68,16 @@ function copyStatic(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
   root: here,
   base: './',
-  plugins: [dropComponentCss(), react(), tailwindcss(), copyStatic()],
+  plugins: [dropComponentCss(), react(), tailwindcss(), ...(isSsrBuild ? [] : [copyStatic()])],
   resolve: {
     alias: [
       // The API client is replaced by the static data the widget ships with.
       { find: /^.*\/api\/client$/, replacement: resolve(here, 'src/client.ts') },
+      // Inline concept cards follow the host page's accent.
+      { find: /^\.\/ConceptBlock$/, replacement: resolve(here, 'src/ConceptBlock.tsx') },
       // Fewer highlight.js grammars than the app's set.
       { find: /^lowlight$/, replacement: resolve(here, 'src/lowlight.ts') },
       // Structure cards: coordinates come from the widget's data directory.
@@ -83,10 +85,18 @@ export default defineConfig({
     ],
   },
   define: { 'process.env.NODE_ENV': JSON.stringify('production') },
-  build: {
+  // The prerender bundles every dependency, so the aliases above apply inside them too.
+  ssr: { noExternal: true },
+  build: isSsrBuild ? {
+    outDir: resolve(here, 'dist-ssr'),
+    emptyOutDir: true,
+    target: 'node20',
+    rollupOptions: { input: resolve(here, 'src/prerender.tsx'), output: { format: 'es', entryFileNames: 'prerender.mjs' } },
+  } : {
     outDir: resolve(here, 'dist'),
     emptyOutDir: true,
-    target: 'es2022',
+    // Safari 15.4 and later (and the other browsers of that time).
+    target: ['es2022', 'safari15.4', 'chrome100', 'firefox100'],
     cssCodeSplit: false,
     modulePreload: false,
     assetsInlineLimit: 0,
@@ -102,4 +112,4 @@ export default defineConfig({
     },
   },
   server: { fs: { allow: [resolve(here, '..')] } },
-});
+}));
