@@ -22,7 +22,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-docker network create "$NET" >/dev/null
+# --internal: the network has no route out, so a test that would call a real external
+# service (Anthropic, LiteLLM, Drive, Semantic Scholar, CrossRef, ...) fails fast instead.
+docker network create --internal "$NET" >/dev/null
 docker run -d --name "$DB" --network "$NET" -e NEO4J_AUTH="neo4j/$PASSWORD" neo4j:5.15 >/dev/null
 
 echo "Waiting for the test Neo4j…"

@@ -13,7 +13,6 @@ async def test_health_ok():
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_health_neo4j_connected():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/health")

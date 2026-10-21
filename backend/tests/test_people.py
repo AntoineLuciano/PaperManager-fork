@@ -14,7 +14,6 @@ def driver():
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_create_person():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/people", json={"name": "Jan Müller", "affiliation": "TU Berlin"})
@@ -25,7 +24,6 @@ async def test_create_person():
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_list_people():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/people")
@@ -34,7 +32,6 @@ async def test_list_people():
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_link_author(driver):
     paper = create_paper(driver, {"title": "Test Authorship"})
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -54,7 +51,6 @@ async def test_link_author(driver):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_link_involves(driver):
     paper = create_paper(driver, {"title": "Involves Test"})
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -74,7 +70,6 @@ async def test_link_involves(driver):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_specialties(driver):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         pr = await c.post("/people", json={"name": "Specialty Person"})

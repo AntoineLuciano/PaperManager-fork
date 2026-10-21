@@ -1,6 +1,6 @@
 """Cypher regression tests for the Concept queries, against a live Neo4j.
 
-Marked ``integration``; CI provides Neo4j, locally they skip when it is down.
+Need a running Neo4j (run_tests.sh / CI provide one); they skip when it is down.
 """
 import pytest
 
@@ -13,8 +13,6 @@ from db.queries.concepts import (
     set_concept_spec,
 )
 from db.queries.papers import create_paper, delete_paper
-
-pytestmark = pytest.mark.integration
 
 
 @pytest.fixture

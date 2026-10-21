@@ -29,3 +29,60 @@ def pytest_configure(config):
             "Point NEO4J_URI at a throwaway local Neo4j, or set PM_TESTS_ALLOW_DB=1 if it is disposable.",
             returncode=2,
         )
+
+
+import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _neo4j_schema():
+    """Create the constraints and fulltext indexes once per run and wait until they are
+    online. The app does this in its lifespan, which the ASGI test client never runs, so on
+    a fresh test database the search tests otherwise race the index creation. Runs that use
+    only the in-memory fake driver (no Neo4j reachable) skip this."""
+    from db.connection import get_driver
+
+    try:
+        driver = get_driver()
+        driver.verify_connectivity()
+    except Exception:  # noqa: BLE001 — no database: nothing to set up
+        yield
+        return
+    from db.schema import run_schema_setup
+
+    run_schema_setup(driver)
+    with driver.session() as session:
+        session.run("CALL db.awaitIndexes(120)").consume()
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _no_external_network(request, monkeypatch):
+    """Fail any test (except @integration ones) that tries to reach a host other than the
+    test Neo4j. The lookup is refused as if offline, so code that swallows network errors
+    as "best effort" cannot hide the attempt, and the test fails at teardown naming the host."""
+    if request.node.get_closest_marker("integration"):
+        yield
+        return
+    import socket
+    from urllib.parse import urlparse
+
+    from config import settings
+
+    allowed = {"localhost", "127.0.0.1", "::1", "test", "testserver", urlparse(settings.neo4j_uri).hostname}
+    real_getaddrinfo = socket.getaddrinfo
+    attempts: list[str] = []
+
+    def guarded_getaddrinfo(host, *args, **kwargs):
+        name = host.decode() if isinstance(host, bytes) else host
+        if name is None or name in allowed:
+            return real_getaddrinfo(host, *args, **kwargs)
+        attempts.append(name)
+        raise socket.gaierror(socket.EAI_NONAME, f"external network is blocked in tests: {name}")
+
+    monkeypatch.setattr(socket, "getaddrinfo", guarded_getaddrinfo)
+    yield
+    if attempts:
+        pytest.fail(f"Test tried to reach external hosts: {sorted(set(attempts))}. Mock the call "
+                    "or mark the test @pytest.mark.integration.", pytrace=False)
+

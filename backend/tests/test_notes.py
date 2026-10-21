@@ -14,7 +14,6 @@ def paper():
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_put_and_get_note(paper):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r_put = await c.put(f"/papers/{paper['id']}/note", json={"content": "My first note."})
@@ -25,7 +24,6 @@ async def test_put_and_get_note(paper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_note_upsert(paper):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         await c.put(f"/papers/{paper['id']}/note", json={"content": "Version 1"})
@@ -43,7 +41,6 @@ async def test_note_upsert(paper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_mentions_created(paper):
     from db.queries.people import delete_person
     driver = get_driver()
@@ -73,7 +70,6 @@ async def test_mentions_created(paper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_mentions_updated(paper):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         pr = await c.post("/people", json={"name": "OldMentionPerson"})
@@ -94,7 +90,6 @@ async def test_mentions_updated(paper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_note_not_found(paper):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get(f"/papers/{paper['id']}/note")

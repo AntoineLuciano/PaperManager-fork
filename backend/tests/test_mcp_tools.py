@@ -103,12 +103,11 @@ def test_add_note_creates_mentions(paper):
 # ── tag and topic tools ────────────────────────────────────────────────────────
 
 def test_tag_paper(paper):
-    from db.queries.tags import get_or_create_tag, tag_paper, list_tags
+    from db.queries.tags import tag_paper, list_tags
     driver = get_driver()
-    tag = get_or_create_tag(driver, "mcp-test-tag")
-    tag_paper(driver, paper["id"], tag["id"])
-    tags = list_tags(driver)
-    assert isinstance(tags, list)
+    tag_paper(driver, paper["id"], "mcp-test-tag")
+    tags = {t["name"]: t for t in list_tags(driver)}
+    assert tags["mcp-test-tag"]["paper_count"] >= 1
 
 
 def test_list_tags():
@@ -138,21 +137,34 @@ def test_link_person_to_paper(paper):
 # ── project tools ──────────────────────────────────────────────────────────────
 
 def test_create_and_list_project():
-    from db.queries.projects import create_project, list_projects, delete_project
+    """Projects are visible to their members only (db/queries/visibility.py); the MCP
+    server runs as DEFAULT_USER_NAME, so list_projects shows that user's projects."""
+    from db.queries.projects import add_project_member, create_project, list_projects, delete_project
+    from db.queries.users import delete_user
+    from services.auth import reset_request_user, set_request_user
+
     driver = get_driver()
     p = create_project(driver, {"name": "MCP Test Project"})
     assert p["name"] == "MCP Test Project"
-    projects = list_projects(driver)
-    assert any(x["id"] == p["id"] for x in projects)
-    delete_project(driver, p["id"])
+    add_project_member(driver, p["id"], "mcp_test_member", role="admin")
+    token = set_request_user("mcp_test_member")
+    try:
+        assert any(x["id"] == p["id"] for x in list_projects(driver))
+        set_request_user("mcp_test_outsider")
+        assert not any(x["id"] == p["id"] for x in list_projects(driver))
+    finally:
+        reset_request_user(token)
+        delete_project(driver, p["id"])
+        delete_user(driver, "mcp_test_member")
 
 
 # ── ai tools ──────────────────────────────────────────────────────────────────
 
 def test_chat_with_paper_mocked(paper):
     from services.ai import chat_with_paper
-    mock_msg = type("M", (), {"content": [type("C", (), {"text": "Great answer about sequences."})()]})()
-    with patch("services.ai.anthropic.Anthropic") as mock_cls:
+    mock_msg = type("M", (), {"stop_reason": "end_turn", "content": [type("C", (), {"text": "Great answer about sequences."})()]})()
+    with patch("services.ai.get_effective_ai_config", return_value={"anthropic_api_key": "test-key"}), \
+         patch("services.ai.anthropic.Anthropic") as mock_cls:
         mock_cls.return_value.messages.create.return_value = mock_msg
         answer = chat_with_paper(
             paper_text="This paper proposes a new model.",

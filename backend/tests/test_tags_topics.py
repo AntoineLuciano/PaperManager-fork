@@ -14,7 +14,6 @@ def paper():
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_tag_paper(paper):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post(f"/papers/{paper['id']}/tags", json={"name": "arxiv"})
@@ -22,7 +21,6 @@ async def test_tag_paper(paper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_tag_idempotent(paper):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         await c.post(f"/papers/{paper['id']}/tags", json={"name": "duplicate-tag"})
@@ -37,7 +35,6 @@ async def test_tag_idempotent(paper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_list_tags_with_count(paper):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         await c.post(f"/papers/{paper['id']}/tags", json={"name": "test-list-tag"})
@@ -51,7 +48,6 @@ async def test_list_tags_with_count(paper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_untag_paper(paper):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         await c.post(f"/papers/{paper['id']}/tags", json={"name": "remove-me"})
@@ -67,7 +63,6 @@ async def test_untag_paper(paper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_add_topic_and_list(paper):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post(f"/papers/{paper['id']}/topics", json={"name": "NLP"})
@@ -78,7 +73,6 @@ async def test_add_topic_and_list(paper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_papers_by_tag(paper):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         await c.post(f"/papers/{paper['id']}/tags", json={"name": "unique-findme-tag"})
@@ -89,7 +83,6 @@ async def test_papers_by_tag(paper):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_related_topics():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/topics/machine-learning/related/deep-learning")

@@ -18,7 +18,6 @@ def cleanup():
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_create_paper(cleanup):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post(BASE, json={"title": "Test Paper", "year": 2024})
@@ -31,7 +30,6 @@ async def test_create_paper(cleanup):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_get_paper(cleanup):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         create = await c.post(BASE, json={"title": "Fetch Me"})
@@ -43,7 +41,6 @@ async def test_get_paper(cleanup):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_get_paper_not_found():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get(f"{BASE}/does-not-exist")
@@ -51,7 +48,6 @@ async def test_get_paper_not_found():
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_list_papers(cleanup):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r1 = await c.post(BASE, json={"title": "Paper A"})
@@ -63,7 +59,6 @@ async def test_list_papers(cleanup):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_update_paper(cleanup):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         create = await c.post(BASE, json={"title": "Old Title"})
@@ -79,7 +74,6 @@ async def test_update_paper(cleanup):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_delete_paper():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         create = await c.post(BASE, json={"title": "Delete Me"})

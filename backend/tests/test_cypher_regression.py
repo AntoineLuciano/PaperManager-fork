@@ -7,9 +7,9 @@ without the `WITH` clause that Neo4j 5 requires, so every paper PATCH
 (reading_status, document_type, bookmark, rating) returned HTTP 500.
 
 They talk to the query layer directly (no FastAPI app, no docling) so they stay
-fast and have light dependencies — only `neo4j` + config. They are marked
-`integration` because they need a running Neo4j; CI provides one as a service
-container. Locally they skip cleanly when Neo4j is unreachable.
+fast and have light dependencies — only `neo4j` + config. They need a running
+Neo4j (backend/scripts/run_tests.sh starts a throwaway one; CI provides one as a
+service container) and skip cleanly when it is unreachable.
 """
 import uuid
 
@@ -18,8 +18,6 @@ import pytest
 from db.connection import get_driver
 from db.queries.papers import create_paper, update_paper, delete_paper
 from db.queries.people import get_or_create_person, link_involves, get_involves_for_paper
-
-pytestmark = pytest.mark.integration
 
 
 @pytest.fixture

@@ -60,7 +60,21 @@ def test_summarize_truncates_long_text():
 
 # ── chat_with_paper unit tests ────────────────────────────────────────────────
 
-def test_chat_returns_answer():
+@pytest.fixture
+def personal_key():
+    """Chat with Claude needs a personal Anthropic key (per user, or the owner's env key).
+    The Anthropic client itself is mocked in each test, so the key is never sent anywhere."""
+    with patch("services.ai.get_effective_ai_config", return_value={"anthropic_api_key": "test-key"}):
+        yield
+
+
+def test_chat_without_personal_key_raises():
+    with patch("services.ai.get_effective_ai_config", return_value={"anthropic_api_key": ""}):
+        with pytest.raises(ValueError, match="Personal Anthropic key"):
+            chat_with_paper(paper_text="x", paper_title="t", question="q")
+
+
+def test_chat_returns_answer(personal_key):
     mock_client = _mock_client("The Transformer uses attention mechanisms.")
     with patch("services.ai.anthropic.Anthropic", return_value=mock_client):
         answer = chat_with_paper(
@@ -71,7 +85,7 @@ def test_chat_returns_answer():
     assert "attention" in answer.lower()
 
 
-def test_chat_passes_history():
+def test_chat_passes_history(personal_key):
     mock_client = _mock_client("Follow-up answer.")
     with patch("services.ai.anthropic.Anthropic", return_value=mock_client):
         chat_with_paper(
@@ -91,7 +105,7 @@ def test_chat_passes_history():
     assert messages[2]["content"] == "Second question"
 
 
-def test_chat_system_prompt_contains_title_and_text():
+def test_chat_system_prompt_contains_title_and_text(personal_key):
     mock_client = _mock_client("Answer.")
     with patch("services.ai.anthropic.Anthropic", return_value=mock_client):
         chat_with_paper(
@@ -108,7 +122,7 @@ def test_chat_system_prompt_contains_title_and_text():
 # ── chat endpoint unit tests ──────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_chat_endpoint_returns_answer():
+async def test_chat_endpoint_returns_answer(personal_key):
     from httpx import AsyncClient, ASGITransport
     from main import app
     from db.queries.papers import create_paper, delete_paper
@@ -123,11 +137,19 @@ async def test_chat_endpoint_returns_answer():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.post(
                 f"/papers/{paper['id']}/chat",
-                json={"question": "What does this paper propose?", "history": []},
+                # The endpoint defaults to the LiteLLM model; ask for Claude explicitly.
+                json={"question": "What does this paper propose?", "history": [], "model": "claude"},
             )
-    assert r.status_code == 200
-    assert r.json()["answer"]
-    delete_paper(get_driver(), paper["id"])
+    try:
+        assert r.status_code == 200
+        assert r.json()["answer"] == "The paper proposes the Transformer."
+        mock_client.messages.create.assert_called_once()
+    finally:
+        conv_id = r.json().get("conversation_id") if r.status_code == 200 else None
+        with get_driver().session() as s:
+            if conv_id:
+                s.run("MATCH (c:Conversation {id: $id}) OPTIONAL MATCH (c)-[:HAS_MESSAGE]->(m) DETACH DELETE c, m", id=conv_id)
+        delete_paper(get_driver(), paper["id"])
 
 
 @pytest.mark.asyncio

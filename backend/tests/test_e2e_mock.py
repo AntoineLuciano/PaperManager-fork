@@ -31,7 +31,10 @@ def patched_app(fake_driver):
 
     with patch("db.connection._driver", fake_driver), \
          patch("db.connection.get_driver", return_value=fake_driver), \
-         patch("services.auth.get_request_user", return_value="niklas"):
+         patch("services.auth.get_request_user", return_value="niklas"), \
+         patch("db.queries.visibility.get_request_user", return_value="niklas"):
+        # visibility.py binds get_request_user at import; patch it there too so the
+        # requests run as the admin, who sees every paper and project.
         # Override FastAPI dependency for endpoints using Depends(get_driver)
         app.dependency_overrides[original_get_driver] = lambda: fake_driver
         yield app

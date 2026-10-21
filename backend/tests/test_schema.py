@@ -3,7 +3,6 @@ from db.connection import get_driver, close_driver
 from db.schema import run_schema_setup
 
 
-@pytest.mark.integration
 def test_schema_setup_idempotent():
     driver = get_driver()
     # Run twice — must not raise
@@ -11,7 +10,6 @@ def test_schema_setup_idempotent():
     run_schema_setup(driver)
 
 
-@pytest.mark.integration
 def test_constraints_exist():
     driver = get_driver()
     run_schema_setup(driver)
@@ -25,7 +23,6 @@ def test_constraints_exist():
     assert expected.issubset(names), f"Missing constraints: {expected - names}"
 
 
-@pytest.mark.integration
 def test_indexes_exist():
     driver = get_driver()
     run_schema_setup(driver)
