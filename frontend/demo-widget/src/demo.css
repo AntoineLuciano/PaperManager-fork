@@ -1,0 +1,128 @@
+/*
+ * The demo widget's own sheet, inside its shadow root: Tailwind (preflight and the utilities the
+ * concept views use, nothing else), the app's tokens, and the layout of the widget itself.
+ * kchat.css and KaTeX's sheet are added before this one, so the overrides below win.
+ */
+@import "tailwindcss" source(none);
+@source "../../src/components/concepts";
+@source "../../src/components/kchat";
+@plugin "@tailwindcss/typography";
+
+:host {
+  all: initial;
+  display: block;
+  --color-raised: #ffffff;
+  --color-base: #f9fafb;
+  --color-ink: #111827;
+  --color-ink-2: #4b5563;
+  --color-ink-3: #9ca3af;
+  --color-line: #e5e7eb;
+  --color-line-s: #f3f4f6;
+  --color-accent: #7c3aed;
+  --color-accent-lo: #f5f3ff;
+  --color-accent-border: #ddd6fe;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+  text-align: left;
+}
+
+.pmd-root { container-type: inline-size; }
+
+/* ---------- frame ---------------------------------------------------- */
+.pmd.kchat {
+  position: relative;
+  height: 700px;
+  grid-template-columns: 262px minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, .05), 0 24px 48px -32px rgba(46, 16, 101, .35);
+}
+.pmd.kchat .kc-rail { display: flex; min-width: 0; }
+.pmd .kc-brand { padding-top: 16px; }
+.pmd .kc-sessions-head { padding: 12px 14px 6px 16px; }
+.pmd-count { font-family: var(--mono); font-size: 10.5px; color: var(--ink-4); }
+
+/* ---------- tabs ----------------------------------------------------- */
+.pmd-tabs { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 2px; padding: 0 8px 10px; }
+.pmd .pmd-tab {
+  display: flex; flex-direction: column; gap: 3px; width: 100%;
+  border: 0; background: none; text-align: left; color: var(--ink); padding: 8px 10px 9px;
+}
+.pmd .pmd-tab.current { background: var(--accent-soft-2); }
+.pmd .pmd-tab .kc-row-title { font-size: 13px; }
+.pmd .pmd-tab .kc-row-title > span:last-child { white-space: normal; }
+.pmd .pmd-tab.pmd-strand { margin-left: 12px; width: calc(100% - 12px); }
+.pmd .pmd-tab.pmd-strand.current .kc-row-title { color: var(--lane-branch); }
+.pmd-hint { font-size: 11.5px; line-height: 1.4; color: var(--ink-3); }
+.pmd .pmd-tab.current .pmd-hint { color: var(--ink-2); }
+.pmd-rail-foot {
+  margin: 0; padding: 10px 16px 14px; border-top: 1px solid var(--line);
+  font-size: 11.5px; line-height: 1.5; color: var(--ink-3);
+}
+
+/* ---------- transcript ------------------------------------------------ */
+.pmd .kc-scroll { padding-top: 24px; overscroll-behavior: contain; }
+.pmd .kc-scroll > .thread { max-width: 800px; }
+.pmd .kc-scroll > .thread.with-lane { max-width: 856px; }
+.pmd .kc-topbar { min-height: 49px; }
+
+/* a composer that only says what it is */
+.pmd-composer { padding: 8px 22px 12px; background: var(--raised); border-top: 1px solid var(--line-2); }
+.pmd-composer-shell {
+  display: flex; align-items: center; gap: 12px; max-width: 800px; margin: 0 auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+  padding: 8px 8px 8px 14px; font-size: 12.5px; line-height: 1.45; color: var(--ink-3);
+}
+.pmd-composer-shell > span:first-child { flex: 1; min-width: 0; }
+.pmd-composer-shell code {
+  font-family: var(--mono); font-size: 11.5px; color: var(--accent); background: var(--accent-soft);
+  padding: 1px 5px; border-radius: 5px; margin: 0 2px;
+}
+.pmd .pmd-send { opacity: .35; cursor: default; flex: none; }
+
+/* ---------- paper preview: a drawer over the transcript --------------- */
+.pmd .pmd-preview {
+  position: absolute; top: 0; right: 0; bottom: 0; left: auto; width: min(420px, 100%); z-index: 30;
+  box-shadow: -18px 0 40px -28px rgba(46, 16, 101, .45);
+  animation: pmd-in .18s cubic-bezier(.2, .7, .3, 1);
+}
+@keyframes pmd-in { from { transform: translateX(24px); opacity: 0; } }
+.pmd .kc-paper .kc-md h2 { font-size: 13.5px; }
+
+/* ---------- narrow: tabs become a row of chips above the transcript ---- */
+@container (max-width: 760px) {
+  .pmd.kchat { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 660px; }
+  .pmd.kchat .kc-rail { border-right: 0; border-bottom: 1px solid var(--line); }
+  .pmd .kc-brand, .pmd .kc-sessions-head, .pmd-rail-foot, .pmd-hint { display: none; }
+  .pmd-tabs {
+    flex-direction: row; overflow-x: auto; overflow-y: hidden; gap: 6px; padding: 9px 12px;
+    scroll-snap-type: x proximity; scroll-padding-inline: 12px; scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  }
+  .pmd-tabs::-webkit-scrollbar { display: none; }
+  .pmd .pmd-tab, .pmd .pmd-tab.pmd-strand {
+    flex: none; width: auto; margin: 0; padding: 5px 12px; scroll-snap-align: start;
+    border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--raised);
+  }
+  .pmd .pmd-tab .kc-row-title { font-size: 12.5px; }
+  .pmd .pmd-tab .kc-row-title > span:last-child { white-space: nowrap; }
+  .pmd .pmd-tab.current { background: var(--accent-soft-2); border-color: var(--accent-line); }
+  .pmd .kc-topbar { padding: 9px 16px; min-height: 0; }
+  .pmd .kc-title h1 { font-size: 14px; }
+  .pmd .kc-scroll { padding-top: 18px; }
+  .pmd .kc-scroll > .thread, .pmd .kc-scroll > .thread.with-lane { padding: 0 14px; }
+  .pmd.kchat .lane { display: none; }
+  .pmd.kchat .user-text { max-width: 94%; font-size: 13.5px; }
+  .pmd.kchat .msg.assistant { font-size: 14px; }
+  .pmd .kc-concept-stage { height: 280px; }
+  .pmd .kc-concept-2d-anim .kc-concept-stage { height: 300px; }
+  .pmd-composer { padding: 8px 12px 10px; }
+  .pmd-composer-shell { font-size: 11.5px; }
+}
+@container (max-width: 480px) {
+  .pmd-composer { display: none; }
+  .pmd .kc-model-pill { display: none; }
+}
