@@ -64,6 +64,24 @@ def _require_available() -> None:
         )
 
 
+# The SDK hands the system prompt to the CLI as one command-line argument, and Linux caps a
+# single argument at 128 KiB (MAX_ARG_STRLEN): a Knowledge Chat scoped to many papers failed
+# with "Argument list too long". Larger system prompts travel in the first user message
+# (stdin) instead.
+_MAX_SYSTEM_ARG_BYTES = 100_000
+_SYSTEM_IN_MESSAGE = (
+    "Your instructions and context are in the <instructions> block at the start of the "
+    "first user message. Follow them exactly as a system prompt."
+)
+
+
+def _fit_system(system: str, prompt: str) -> tuple[str, str]:
+    """Return (system, prompt), moving an oversized system prompt into the prompt."""
+    if len(system.encode("utf-8")) <= _MAX_SYSTEM_ARG_BYTES:
+        return system, prompt
+    return _SYSTEM_IN_MESSAGE, f"<instructions>\n{system}\n</instructions>\n\n{prompt}"
+
+
 def _subprocess_env() -> dict[str, str]:
     """Env overrides for the CLI: force subscription auth.
 
@@ -104,6 +122,7 @@ async def _run(
         mcp_servers[_LIBRARY_SERVER] = create_sdk_mcp_server(name=_LIBRARY_SERVER, tools=library_tools)
         allowed += [f"mcp__{_LIBRARY_SERVER}__{t.name}" for t in library_tools]
 
+    system, prompt = _fit_system(system, prompt)
     options = ClaudeAgentOptions(
         system_prompt=system,
         model=CLAUDE_CODE_MODEL,
@@ -211,8 +230,9 @@ def run_structured_claude_code(
     async def run(emit: Callable[[dict[str, Any]], None]) -> None:
         from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
 
+        system_, prompt_ = _fit_system(system, prompt)
         options = ClaudeAgentOptions(
-            system_prompt=system,
+            system_prompt=system_,
             model=model,
             effort=effort,
             output_format={"type": "json_schema", "schema": schema},
@@ -226,7 +246,7 @@ def run_structured_claude_code(
         )
 
         async def messages():
-            yield {"type": "user", "message": {"role": "user", "content": prompt}}
+            yield {"type": "user", "message": {"role": "user", "content": prompt_}}
 
         async for message in query(prompt=messages(), options=options):
             if isinstance(message, ResultMessage):
