@@ -19,10 +19,10 @@ one Neo4j knowledge graph you can search and chat with.
 |---|---|
 | **Ingestion** | Drop a PDF or paste an arXiv / DOI / PubMed / bioRxiv link. Metadata from Semantic Scholar and CrossRef, duplicate check, then summary, topics, tags, figures, tables and references. Bulk import, literature search and RSS feeds too. |
 | **Reading** | One view per paper: PDF with colour-coded highlights, AI summary, figures you can ask about, references, related papers, claims, markdown notes that link `@people` and `#topics`. |
-| **Concepts** | Finds the ideas on each PDF page that a picture explains best and generates an animation, formula breakdown, plot or explanation for each, marked on the page. |
+| **Concepts** | Finds the ideas on each PDF page that a picture explains best and generates an animation, formula breakdown, plot or explanation for each, marked on the page. Adapted from [Get It.](https://github.com/beltromatti/get-it) (Apache-2.0). |
 | **Quick tour** | An overview, what to skip, and 6–12 stops anchored to passages in the PDF. |
 | **Project concept map** | Key concepts and their relations across every paper in a project, as an interactive graph filtered by author, year and kind. |
-| **Knowledge chat** | Ask across the whole library; scope with `@project:`, `@topic:`, `@tag:`, `@paper:`, `@user:`; graph-aware, with optional web search. Claude, Claude Code or any OpenAI-compatible model. |
+| **Knowledge chat** | Ask across the whole library in a desk-style layout: citations open the paper beside the chat, answers get interactive concept cards (formula, plot, animation, short note) and 3D molecules from the PDB or AlphaFold DB ([3Dmol.js](https://3dmol.csb.pitt.edu)). Scope with `@project:`, `@topic:`, `@tag:`, `@paper:`, `@person:`, `@user:`; graph-aware, with optional web search. Claude, Claude Code or any OpenAI-compatible model. |
 | **MCP server** | 35 tools for Claude Desktop and Claude Code: search, read, annotate, upload, merge duplicates. |
 | **More** | Knowledge graph and Cypher editor, cross-paper synthesis, research-gap finder, author tracking, duplicate merge manager, BibTeX export, multi-user accounts with shared projects. |
 
@@ -33,7 +33,11 @@ one Neo4j knowledge graph you can search and chat with.
   </tr>
   <tr>
     <td width="50%"><img src="docs/img/screenshots/concept-map.webp" alt="Project concept map"><br><sub>Concept map of 210 papers</sub></td>
-    <td width="50%"><img src="docs/img/screenshots/chat.webp" alt="Knowledge chat"><br><sub>Knowledge chat</sub></td>
+    <td width="50%"><img src="docs/img/screenshots/chat-preview.webp" alt="Knowledge chat with a cited paper open beside it"><br><sub>Knowledge chat: a cited paper opens beside the answer</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/img/screenshots/chat-concepts.webp" alt="Knowledge chat answer with a concept card"><br><sub>Concept cards in a chat answer</sub></td>
+    <td width="50%"><img src="docs/img/screenshots/chat-structure.webp" alt="3D structure card of the SARS-CoV-2 spike, PDB 6VXX"><br><sub>3D structure card (PDB 6VXX)</sub></td>
   </tr>
 </table>
 
