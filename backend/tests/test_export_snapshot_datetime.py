@@ -10,7 +10,7 @@ class DummyDriver:
             def __exit__(self, *a): return False
             def run(self, query):
                 q = " ".join(query.split())
-                if "MATCH (n) RETURN elementId(n) AS export_id" in q:
+                if "RETURN elementId(n) AS export_id" in q:
                     return [{
                         "export_id": "n1",
                         "labels": ["Test"],

@@ -125,6 +125,8 @@ def _build_snapshot(driver: Driver) -> dict:
             )
         ]
 
+        # User nodes are not exported, so a relationship to one (MEMBER_OF, ADDED_BY,
+        # WROTE, ...) names the user instead; import re-attaches it to that account.
         snapshot["relationships"] = [
             {
                 "export_id": record["export_id"],
@@ -132,6 +134,8 @@ def _build_snapshot(driver: Driver) -> dict:
                 "end_export_id": record["end_export_id"],
                 "type": record["type"],
                 "properties": dict(record["props"]),
+                **({"start_user": record["start_user"]} if record.get("start_user") else {}),
+                **({"end_user": record["end_user"]} if record.get("end_user") else {}),
             }
             for record in session.run(
                 """
@@ -140,7 +144,9 @@ def _build_snapshot(driver: Driver) -> dict:
                        elementId(a) AS start_export_id,
                        elementId(b) AS end_export_id,
                        type(r) AS type,
-                       properties(r) AS props
+                       properties(r) AS props,
+                       CASE WHEN a:User THEN a.name END AS start_user,
+                       CASE WHEN b:User THEN b.name END AS end_user
                 ORDER BY export_id
                 """
             )
@@ -163,10 +169,20 @@ def _restore_snapshot(driver: Driver, payload: dict, replace: bool) -> dict:
     counts = {"nodes": 0, "relationships": 0, "notes": 0, "figures": 0, "note_rels": 0, "figure_rels": 0}
     tmp_label = _cypher_ident(IMPORT_TMP_LABEL)
 
+    # Accounts are not part of a snapshot: replacing keeps the existing User nodes
+    # (wiping them locked everyone out, the importing admin included), and User nodes
+    # in older snapshots are not recreated. Relationships to a user are re-attached by
+    # name to the account that exists here, or dropped if there is none.
+    user_by_export_id = {
+        node.get("export_id"): (node.get("properties") or {}).get("name")
+        for node in nodes
+        if isinstance(node, dict) and "User" in (node.get("labels") or [])
+    }
+
     def _tx_write(tx):
         if replace:
-            log.info("Clearing existing graph before snapshot restore")
-            tx.run("MATCH (n) DETACH DELETE n").consume()
+            log.info("Clearing existing graph (except user accounts) before snapshot restore")
+            tx.run("MATCH (n) WHERE NOT n:User DETACH DELETE n").consume()
 
         # Track special node types for validation
         note_count = 0
@@ -197,6 +213,8 @@ def _restore_snapshot(driver: Driver, payload: dict, replace: bool) -> dict:
                     log.warning("Figure node without drive_file_id: id=%s, paper_id=%s", 
                               properties.get("id"), properties.get("paper_id"))
 
+            if "User" in labels:
+                continue
             label_clause = "".join(f":{_cypher_ident(label)}" for label in labels)
             tx.run(
                 f"""
@@ -238,15 +256,21 @@ def _restore_snapshot(driver: Driver, payload: dict, replace: bool) -> dict:
             elif rel_type == "HAS_FIGURE":
                 figure_rel_count += 1
 
+            start_user = rel.get("start_user") or user_by_export_id.get(start_export_id)
+            end_user = rel.get("end_user") or user_by_export_id.get(end_export_id)
+            match_a = "(a:User {name: $start_user})" if start_user else f"(a:{tmp_label} {{{IMPORT_TMP_PROP}: $start_export_id}})"
+            match_b = "(b:User {name: $end_user})" if end_user else f"(b:{tmp_label} {{{IMPORT_TMP_PROP}: $end_export_id}})"
             tx.run(
                 f"""
-                MATCH (a:{tmp_label} {{{IMPORT_TMP_PROP}: $start_export_id}})
-                MATCH (b:{tmp_label} {{{IMPORT_TMP_PROP}: $end_export_id}})
+                MATCH {match_a}
+                MATCH {match_b}
                 CREATE (a)-[r:{_cypher_ident(rel_type)}]->(b)
                 SET r = $properties
                 """,
                 start_export_id=start_export_id,
                 end_export_id=end_export_id,
+                start_user=start_user,
+                end_user=end_user,
                 properties=properties,
             ).consume()
             counts["relationships"] += 1
