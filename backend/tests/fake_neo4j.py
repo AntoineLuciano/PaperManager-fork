@@ -222,6 +222,21 @@ class FakeCypherSession:
                 return FakeResult([FakeRecord({var: node})])
             return FakeResult([])
 
+        # add_project_member: MATCH (proj:Project {id: $pid}) MERGE (u:User {name: $name}) ...
+        # MERGE (u)-[m:MEMBER_OF]->(proj)
+        if "MEMBER_OF" in q and "MERGE (u:User {name: $name})" in q:
+            proj = self.store.find_node("Project", id=params.get("pid"))
+            if not proj:
+                return FakeResult([])
+            user = self.store.find_node("User", name=params.get("name")) or self.store.add_node(
+                {"User"}, {"name": params.get("name"), "id": params.get("uid")}
+            )
+            self.store.add_relationship(user, proj, "MEMBER_OF")
+            return FakeResult([FakeRecord({
+                "m": {"role": params.get("role"), "joined_at": params.get("now")},
+                "username": user.props["name"], "user_id": user.props.get("id"), "color": None,
+            })])
+
         # MERGE (t:Label {name: $name}) ON CREATE SET t.id = $id RETURN t
         m = re.search(r"MERGE\s+\((\w+):(\w+)\s+\{name:\s*\$name\}\)", q)
         if m and "RETURN" in q:

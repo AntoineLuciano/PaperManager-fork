@@ -32,7 +32,16 @@ class ProjectKeywordsBody(BaseModel):
 
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
 def create(body: ProjectCreate):
-    return create_project(get_driver(), body.model_dump())
+    from services.auth import get_request_user
+
+    driver = get_driver()
+    project = create_project(driver, body.model_dump())
+    # Only members see a project (db/queries/visibility.py), so the creator joins it;
+    # without this a non-admin's new project vanished from their own list.
+    user = get_request_user()
+    if user:
+        add_project_member(driver, project["id"], user, role="admin")
+    return project
 
 
 @router.get("")
