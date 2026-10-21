@@ -20,7 +20,82 @@ When you send a message, the backend runs a multi-phase pipeline:
 7. Persist to graph          →  message saved, conversation updated
 ```
 
-The frontend displays each phase as a step card as it arrives.
+The frontend displays each phase as a step row above the answer as it arrives.
+
+---
+
+## Interface
+
+`frontend/src/pages/KnowledgeChat.tsx`, components in `frontend/src/components/kchat/`. The layout follows the
+thesis desk (a local Claude Code chat the concept and structure cards were first built for), in the app's light violet:
+
+| Part | Component | What it does |
+|---|---|---|
+| Conversation list | `ConversationList.tsx` | Newest first, search over titles, `+ New`, rename and delete on hover; forks nested under the conversation they came from |
+| Transcript | `KnowledgeChat.tsx` | Reading-width column; questions in a tinted bubble; library steps (graph query, vector search, full text, figures, web) as collapsible rows above each answer; under each answer the cited papers as chips, the papers that were in context, `✦ Visualise` and `copy` |
+| Branch lane | `BranchLane.tsx` | A git-style line beside the transcript: a dot per question, a curve where a strand was forked; hover a stretch to see its question, click a knob to open a strand |
+| Context strip | `KnowledgeChat.tsx` | Tokens used of the context window, split into system prompt, papers, history, question and answer; unfolds to the papers in context |
+| Composer | `Composer.tsx` | `@project:` / `@topic:` / `@tag:` / `@paper:` / `@person:` / `@user:` autocomplete, the mentions shown as scope chips, `+ paper` to attach library papers by id, web and concept toggles, model choice, Stop |
+| Preview pane | `PreviewPane.tsx` | Opens a cited paper (title, year, venue, summary, abstract, figures, `Open in library`, `PDF`) or a figure, beside the chat |
+| Answer rendering | `Markdown.tsx` | GFM, KaTeX (`\(` / `\[` normalised to `$`), highlighted code, library figures (`/papers/<id>/figures/<fid>/image` only), `[title](/paper/<id>)` citations as chips that open the preview, ```` ```concept ```` and ```` ```structure ```` blocks as cards |
+
+Papers attached in the composer travel as `paper_ids` on the request and are always put first in context.
+
+## Concept cards
+
+The per-paper concept pipeline (`services/concepts.py`, `prompts/concept_*.txt`) also runs on answers
+(`services/chat_concepts.py`): every `## ` section of the answer plays the part of a PDF page, detection picks at most
+four ideas (one per type first), and a spec is generated for each, with the pipeline's model routing (Claude Code on the
+subscription when the user may use it, otherwise the API key). The cards are stored on the `Message` node
+(`concepts_json`, `concepts_status`, `concepts_error`) with the index of the section they explain, and render at the end of
+that section. `sections.ts` mirrors the backend's `split_sections` (fence-aware), and both are tested.
+
+- `✦ Visualise` under an answer, or `concepts · auto` in the composer for every answer longer than a few paragraphs, calls
+  `POST /knowledge-chat/messages/{id}/visualise`; the job runs in a background thread and the page polls
+  `GET /knowledge-chat/messages/{id}/concepts`. A job lost to a restart reads as failed and can be started again.
+- An animation or graph that fails in the browser shows `fix`, which sends the error to
+  `POST /knowledge-chat/messages/{id}/concepts/{index}/repair` (the pipeline's repair prompt).
+- The model may also write a card itself as a ```` ```concept ```` block with an inline spec (formula, graph, 2d-text).
+- Animations run in the sandboxed iframe of `components/concepts/` (no same-origin, no network) with pause, 0.5×, 1×, 2×
+  and replay; the sandbox runs a virtual clock so every spec obeys the speed.
+
+## 3D structures
+
+A ```` ```structure ```` block renders a 3Dmol.js card (`components/kchat/structure/`, ported from the desk). 3Dmol.js is
+vendored in `frontend/public/vendor/3dmol/` (BSD-3-Clause) and loaded on the first structure; nothing is fetched from a
+CDN. The block holds a PDB id (`6VXX`), `AF-<UniProt>` for an AlphaFold DB model, or a JSON spec with models
+(`pdb` / `afdb`, chains, colour by chain / spectrum / pLDDT / role, superposition by Cα), highlights (chain, residues,
+residue names, het groups; cartoon, sticks, spheres or surface) and a caption. The card has surface, dim, spin, reset,
+a taller stage, fullscreen and PNG; hovering names the residue and B-factor, clicking collects residues into a copyable
+list; pLDDT colouring shows its legend.
+
+Coordinates come from `GET /knowledge-chat/structures?pdb=<id>` or `?afdb=<accession>` (`services/structures.py`): the
+RCSB mmCIF, or the AlphaFold DB model named by its prediction API, fetched once and cached in `/data/structures`
+(`STRUCTURE_CACHE_DIR` to change). Ids are validated before any request.
+
+## Strands (forks)
+
+Hovering a question offers `⑂ edit` (copy the conversation up to just before it and put its text back in the composer)
+and `⑂ strand` (copy it up to that answer and continue there). `POST /knowledge-chat/conversations/{id}/fork` with
+`keep` (questions to inherit) copies the messages, their paper links and concept cards into a new conversation with
+`parent_id`, `fork_at` and `fork_kind`; the first question asked in it becomes its `branch_label`. The original is never
+changed. Deleting a parent leaves its strands as top-level conversations.
+
+## Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/knowledge-chat/stream` | Ask (SSE: `step`, `status`, `context`, `conversation`, `token`, `done`, `error`) |
+| GET | `/knowledge-chat/conversations` | Knowledge Chat conversations (per-paper chats are listed on their paper) |
+| PATCH / DELETE | `/knowledge-chat/conversations/{id}` | Rename / delete |
+| GET | `/knowledge-chat/conversations/{id}/messages` | Messages with cited papers and concept cards |
+| POST | `/knowledge-chat/conversations/{id}/compact` | Sliding-window compaction |
+| POST | `/knowledge-chat/conversations/{id}/fork` | New strand |
+| POST / GET | `/knowledge-chat/messages/{id}/visualise`, `.../concepts` | Concept cards for an answer |
+| POST | `/knowledge-chat/messages/{id}/concepts/{index}/repair` | Regenerate one card with its error |
+| GET | `/knowledge-chat/structures` | Cached RCSB / AlphaFold DB coordinates |
+
+All routes require a login.
 
 ---
 
@@ -87,10 +162,15 @@ Threshold configurable in **Settings → Knowledge Chat → Route large context 
 ## Phase 5 — Agentic Tool-Use Loop
 
 This is the core of inference. Claude receives:
-- A structured system prompt with your profile (Tübingen, math/CS/physics, expert)
+- A structured system prompt (`prompts/knowledge_chat_system.txt`): an expert register, how the chat renders maths,
+  citations (`[title](/paper/<id>)`), figures, ```` ```concept ```` and ```` ```structure ```` blocks, and when to use them
 - The complete Neo4j schema
-- The pre-loaded paper context block
-- Two tools: `run_cypher` and `semantic_search`
+- The pre-loaded paper context block (each paper with its `id` and year)
+- Four tools: `run_cypher`, `semantic_search`, `load_full_text` and `list_figures` (a paper's extracted figures with
+  their image URLs, to embed one in the answer)
+
+The `litellm` model gets one completion through the LiteLLM proxy with the same system prompt, without tools. The
+`claude-code` model runs on the Claude subscription through the Agent SDK with the same library tools (and WebSearch).
 
 Claude is instructed to **state its retrieval intent in prose before calling any tool** (ReAct-style planning) to reduce redundant tool calls.
 
