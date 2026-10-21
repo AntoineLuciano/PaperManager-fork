@@ -86,3 +86,47 @@ def _no_external_network(request, monkeypatch):
         pytest.fail(f"Test tried to reach external hosts: {sorted(set(attempts))}. Mock the call "
                     "or mark the test @pytest.mark.integration.", pytrace=False)
 
+
+# ── Demo library ──────────────────────────────────────────────────────────────
+# A populated graph of ~10 well-known papers (tests/fixtures/demo_library.json, loaded by
+# tests/demo_data.py). Both fixtures empty the test database first and again afterwards, so
+# tests that use them see exactly the demo library and leave nothing behind, whatever ran
+# before. pytest_configure above has already refused any database that is not disposable.
+
+def _wipe_test_database(driver) -> None:
+    with driver.session() as session:
+        session.run("MATCH (n) DETACH DELETE n").consume()
+
+
+def _fresh_demo_library():
+    from db.connection import get_driver
+    from tests.demo_data import load_demo_library
+
+    driver = get_driver()
+    _wipe_test_database(driver)
+    return driver, load_demo_library(driver)
+
+
+@pytest.fixture(scope="module")
+def demo_library():
+    """The demo library, loaded once per test module. Tests must not change it;
+    use demo_library_fresh for tests that write."""
+    driver, ids = _fresh_demo_library()
+    yield ids
+    _wipe_test_database(driver)
+
+
+@pytest.fixture
+def demo_library_fresh():
+    """The demo library, loaded for one test, which may change it."""
+    driver, ids = _fresh_demo_library()
+    yield ids
+    _wipe_test_database(driver)
+
+
+@pytest.fixture
+def auth_headers():
+    """Authorization headers for a username: auth_headers("demo_alice")."""
+    from services.auth import create_access_token
+
+    return lambda user: {"Authorization": f"Bearer {create_access_token({'sub': user})}"}

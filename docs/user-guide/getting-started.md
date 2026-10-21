@@ -158,6 +158,46 @@ You should see the library page with a drop zone and a **+** button to add paper
 
 ---
 
+## Demo data
+
+To try the app before adding your own papers, load the demo library into your **local**
+development database:
+
+```bash
+cd backend
+python scripts/seed_demo.py                  # your login (DEFAULT_USER_NAME) joins the demo projects
+python scripts/seed_demo.py --member alice   # or name the login(s) that should see them
+```
+
+It adds ten well-known papers (Attention Is All You Need, DDPM, Score SDE, EDM, Flow Matching,
+AlphaFold 2 and 3, RFdiffusion, ESM-2 and a GNN survey) with their authors, topics, tags and
+citations, two projects, notes with `@mentions` and `#topics`, claims, a project concept map and a
+conversation. It is the same data the tests use (`backend/tests/fixtures/demo_library.json`).
+The script only adds data, does nothing when the demo is already loaded, and refuses a Neo4j
+that is not on this machine unless you pass `--force`.
+
+---
+
+## Running the tests
+
+```bash
+backend/scripts/run_tests.sh                          # everything except @integration tests
+backend/scripts/run_tests.sh -q tests/test_search.py  # any pytest arguments
+```
+
+The script starts a throwaway Neo4j and runs pytest in a one-off container of the backend image
+(build it first with `docker compose build backend`), on a Docker network with no route to the
+internet, then removes both. Your `.env` is not used. Tests that would reach an outside service
+fail and name the host; tests that really need one (Anthropic, Google Drive) are marked
+`@pytest.mark.integration` and are left out by default.
+
+Tests write to the database, so they refuse to run against a Neo4j that is not on this machine
+unless `PM_TESTS_ALLOW_DB=1` says it is disposable. Never point them at your real library.
+Tests that need a populated graph use the `demo_library` fixture, which empties the test
+database and loads the demo library.
+
+---
+
 ## What's Next?
 
 - [First steps](first-steps.md) — one paper from upload to concept map

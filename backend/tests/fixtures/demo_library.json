@@ -1,0 +1,302 @@
+{
+  "_about": [
+    "A small demo library for tests (tests/demo_data.py) and for trying the app (scripts/seed_demo.py).",
+    "Papers are well-known public works with their real titles, years, venues and identifiers. Long author lists are",
+    "shortened to the first authors and the last author. Abstracts, summaries, notes, claims, concepts and the",
+    "conversation are short paraphrases written for this file. Users are fictional (demo_*).",
+    "Deliberate quirks: 'ddpm_stub' is a citation stub of the DDPM paper under its 10.48550 DOI (a duplicate the merge",
+    "scan must find); 'unet' is a reference that is only cited, never added; 'reading_group' is a private project."
+  ],
+  "users": [
+    {"name": "demo_alice", "is_admin": true, "color": "#2f6fdf"},
+    {"name": "demo_bob", "is_admin": false, "color": "#d9822b"},
+    {"name": "demo_carol", "is_admin": false, "color": "#3a9b5c"}
+  ],
+  "papers": [
+    {
+      "key": "transformer",
+      "title": "Attention Is All You Need",
+      "authors": ["Ashish Vaswani", "Noam Shazeer", "Niki Parmar", "Jakob Uszkoreit", "Llion Jones", "Aidan N. Gomez", "Łukasz Kaiser", "Illia Polosukhin"],
+      "year": 2017,
+      "venue": "NeurIPS",
+      "doi": "arXiv:1706.03762",
+      "abstract": "Introduces the Transformer, a sequence transduction architecture built only from attention layers, without recurrence or convolution, which trains faster and set new results in machine translation.",
+      "summary": "Self-attention replaces recurrence; multi-head attention and positional encodings make the model parallel and strong on translation.",
+      "topics": ["Transformers", "Sequence Modeling"],
+      "tags": ["foundational", "reading-group"],
+      "reading_status": "read",
+      "bookmarked": true,
+      "added_by": "demo_bob"
+    },
+    {
+      "key": "ddpm",
+      "title": "Denoising Diffusion Probabilistic Models",
+      "authors": ["Jonathan Ho", "Ajay Jain", "Pieter Abbeel"],
+      "year": 2020,
+      "venue": "NeurIPS",
+      "doi": "arXiv:2006.11239",
+      "abstract": "Shows that diffusion probabilistic models, trained with a weighted variational bound linked to denoising score matching, generate high-quality images.",
+      "summary": "A fixed forward process adds Gaussian noise step by step; a network learns to predict that noise and so to reverse the chain.",
+      "topics": ["Diffusion Models", "Generative Modeling"],
+      "tags": ["foundational"],
+      "reading_status": "read",
+      "bookmarked": true,
+      "added_by": "demo_alice"
+    },
+    {
+      "key": "score_sde",
+      "title": "Score-Based Generative Modeling through Stochastic Differential Equations",
+      "authors": ["Yang Song", "Jascha Sohl-Dickstein", "Diederik P. Kingma", "Abhishek Kumar", "Stefano Ermon", "Ben Poole"],
+      "year": 2021,
+      "venue": "ICLR",
+      "doi": "arXiv:2011.13456",
+      "abstract": "Unifies score-based models and diffusion models as stochastic differential equations whose reverse-time process depends on the score of the perturbed data distribution.",
+      "summary": "Continuous-time view of diffusion: forward SDE, reverse SDE and a probability-flow ODE, all driven by a learned score function.",
+      "topics": ["Diffusion Models", "Generative Modeling"],
+      "tags": ["foundational"],
+      "reading_status": "reading",
+      "bookmarked": false,
+      "added_by": "demo_alice"
+    },
+    {
+      "key": "edm",
+      "title": "Elucidating the Design Space of Diffusion-Based Generative Models",
+      "authors": ["Tero Karras", "Miika Aittala", "Timo Aila", "Samuli Laine"],
+      "year": 2022,
+      "venue": "NeurIPS",
+      "doi": "arXiv:2206.00364",
+      "abstract": "Separates the design choices of diffusion models (noise schedule, preconditioning, sampler, training loss) and tunes each one, improving sample quality with fewer network evaluations.",
+      "summary": "A modular framework for diffusion design choices with a second-order Heun sampler and network preconditioning.",
+      "topics": ["Diffusion Models", "Generative Modeling"],
+      "tags": ["to-read"],
+      "reading_status": "unread",
+      "bookmarked": false,
+      "added_by": "demo_alice"
+    },
+    {
+      "key": "flow_matching",
+      "title": "Flow Matching for Generative Modeling",
+      "authors": ["Yaron Lipman", "Ricky T. Q. Chen", "Heli Ben-Hamu", "Maximilian Nickel", "Matt Le"],
+      "year": 2023,
+      "venue": "ICLR",
+      "doi": "arXiv:2210.02747",
+      "abstract": "Trains continuous normalizing flows without simulation by regressing vector fields of fixed conditional probability paths, including diffusion paths and optimal-transport paths.",
+      "summary": "Simulation-free training of continuous flows; optimal-transport paths give straighter trajectories than diffusion paths.",
+      "topics": ["Flow Matching", "Generative Modeling"],
+      "tags": ["to-read"],
+      "reading_status": "unread",
+      "bookmarked": true,
+      "added_by": "demo_alice"
+    },
+    {
+      "key": "alphafold2",
+      "title": "Highly accurate protein structure prediction with AlphaFold",
+      "authors": ["John Jumper", "Richard Evans", "Alexander Pritzel", "Tim Green", "Michael Figurnov", "Demis Hassabis"],
+      "year": 2021,
+      "venue": "Nature",
+      "doi": "10.1038/s41586-021-03819-2",
+      "abstract": "Presents AlphaFold, a neural network that predicts protein structures from sequence with atomic accuracy in many cases, using evolutionary, physical and geometric constraints.",
+      "summary": "Evoformer blocks over MSA and pair representations feed a structure module that outputs atom coordinates directly.",
+      "topics": ["Protein Structure Prediction"],
+      "tags": ["foundational", "protein"],
+      "reading_status": "read",
+      "bookmarked": false,
+      "added_by": "demo_bob"
+    },
+    {
+      "key": "alphafold3",
+      "title": "Accurate structure prediction of biomolecular interactions with AlphaFold 3",
+      "authors": ["Josh Abramson", "Jonas Adler", "Jack Dunger", "Richard Evans", "Tim Green", "Demis Hassabis", "John M. Jumper"],
+      "year": 2024,
+      "venue": "Nature",
+      "doi": "10.1038/s41586-024-07487-w",
+      "abstract": "Extends structure prediction to complexes of proteins, nucleic acids, small molecules, ions and modified residues with a diffusion-based architecture.",
+      "summary": "Replaces the structure module with a diffusion module over raw atom coordinates and a simpler Pairformer trunk.",
+      "topics": ["Protein Structure Prediction", "Diffusion Models"],
+      "tags": ["protein", "to-read"],
+      "reading_status": "reading",
+      "bookmarked": false,
+      "added_by": "demo_bob"
+    },
+    {
+      "key": "rfdiffusion",
+      "title": "De novo design of protein structure and function with RFdiffusion",
+      "authors": ["Joseph L. Watson", "David Juergens", "Nathaniel R. Bennett", "Brian L. Trippe", "Jason Yim", "David Baker"],
+      "year": 2023,
+      "venue": "Nature",
+      "doi": "10.1038/s41586-023-06415-8",
+      "abstract": "Fine-tunes the RoseTTAFold structure prediction network as a denoising diffusion model for protein backbones, enabling design of binders, symmetric assemblies and enzyme scaffolds.",
+      "summary": "A structure predictor turned denoiser generates new backbones; designs were confirmed experimentally, including by cryo-EM.",
+      "topics": ["Protein Design", "Diffusion Models"],
+      "tags": ["protein"],
+      "reading_status": "read",
+      "bookmarked": true,
+      "added_by": "demo_alice"
+    },
+    {
+      "key": "esm2",
+      "title": "Evolutionary-scale prediction of atomic-level protein structure with a language model",
+      "authors": ["Zeming Lin", "Halil Akin", "Roshan Rao", "Brian Hie", "Zhongkai Zhu", "Alexander Rives"],
+      "year": 2023,
+      "venue": "Science",
+      "doi": "10.1126/science.ade2574",
+      "abstract": "Scales protein language models to billions of parameters and shows that structural information emerges in their representations, enabling fast single-sequence structure prediction with ESMFold.",
+      "summary": "ESM-2 language model plus ESMFold head: structure prediction without multiple sequence alignments, fast enough for metagenomic scale.",
+      "topics": ["Protein Language Models", "Protein Structure Prediction"],
+      "tags": ["protein"],
+      "reading_status": "unread",
+      "bookmarked": false,
+      "added_by": "demo_bob"
+    },
+    {
+      "key": "gnn_survey",
+      "title": "A Comprehensive Survey on Graph Neural Networks",
+      "authors": ["Zonghan Wu", "Shirui Pan", "Fengwen Chen", "Guodong Long", "Chengqi Zhang", "Philip S. Yu"],
+      "year": 2021,
+      "venue": "IEEE Transactions on Neural Networks and Learning Systems",
+      "doi": "10.1109/TNNLS.2020.2978386",
+      "abstract": "Surveys graph neural networks and groups them into recurrent, convolutional, graph autoencoder and spatial-temporal families, with applications, benchmarks and open problems.",
+      "summary": "A taxonomy of GNN architectures with datasets and open-source implementations.",
+      "document_type": "review",
+      "topics": ["Graph Neural Networks"],
+      "tags": ["to-read"],
+      "reading_status": "unread",
+      "bookmarked": false,
+      "added_by": "demo_carol"
+    },
+    {
+      "key": "ddpm_stub",
+      "title": "Denoising Diffusion Probabilistic Models",
+      "authors": [],
+      "year": 2020,
+      "doi": "10.48550/arXiv.2006.11239",
+      "metadata_source": "from-references",
+      "topics": [],
+      "tags": ["from-references"]
+    }
+  ],
+  "citations": [
+    {"from": "ddpm", "to": "transformer"},
+    {"from": "score_sde", "to": "ddpm"},
+    {"from": "edm", "to": "ddpm"},
+    {"from": "edm", "to": "score_sde"},
+    {"from": "flow_matching", "to": "ddpm"},
+    {"from": "flow_matching", "to": "score_sde"},
+    {"from": "alphafold3", "to": "alphafold2"},
+    {"from": "alphafold3", "to": "edm"},
+    {"from": "rfdiffusion", "to": "alphafold2"},
+    {"from": "rfdiffusion", "to": "ddpm_stub"},
+    {"from": "esm2", "to": "alphafold2"},
+    {"from": "esm2", "to": "transformer"}
+  ],
+  "external_references": [
+    {"key": "unet", "cited_by": "ddpm", "title": "U-Net: Convolutional Networks for Biomedical Image Segmentation", "year": 2015, "doi": "arXiv:1505.04597"}
+  ],
+  "projects": [
+    {
+      "key": "protein_gen",
+      "name": "Generative models for protein design",
+      "description": "How diffusion and flow models moved from images to protein structure.",
+      "members": [{"user": "demo_alice", "role": "admin"}, {"user": "demo_bob", "role": "read"}],
+      "papers": ["ddpm", "score_sde", "edm", "flow_matching", "alphafold2", "alphafold3", "rfdiffusion", "esm2"]
+    },
+    {
+      "key": "reading_group",
+      "name": "Sequence models reading group",
+      "description": "Private list for the weekly reading group.",
+      "members": [{"user": "demo_bob", "role": "admin"}],
+      "papers": ["transformer"]
+    }
+  ],
+  "notes": [
+    {
+      "paper": "ddpm",
+      "author": "demo_alice",
+      "content": "Predicting the noise instead of the mean is the trick that makes training stable. @Yang_Song's SDE paper explains why this is denoising score matching. #Diffusion-Models #Generative-Modeling"
+    },
+    {
+      "paper": "rfdiffusion",
+      "author": "demo_alice",
+      "content": "Starts from a structure predictor (RoseTTAFold) and fine-tunes it as the denoiser. Compare the design pipeline from @David_Baker's lab with #Flow-Matching approaches. #Protein-Design"
+    },
+    {
+      "paper": "alphafold3",
+      "author": "demo_bob",
+      "content": "The diffusion module follows the EDM parameterisation from @Tero_Karras. #Protein-Structure-Prediction"
+    }
+  ],
+  "claims": [
+    {"paper": "transformer", "type": "method", "text": "A model built only from attention layers, without recurrence or convolution, can reach state-of-the-art translation quality."},
+    {"paper": "ddpm", "type": "method", "text": "Sampling reverses a fixed Markov chain that gradually adds Gaussian noise to the data."},
+    {"paper": "ddpm", "type": "finding", "text": "Training on a simplified objective that predicts the added noise gives the best sample quality."},
+    {"paper": "score_sde", "type": "claim", "text": "Score-based models and diffusion models are discretisations of the same stochastic differential equation."},
+    {"paper": "edm", "type": "finding", "text": "Tuning sampler, preconditioning and noise distribution separately improves image quality while needing fewer sampling steps."},
+    {"paper": "flow_matching", "type": "method", "text": "Continuous normalizing flows can be trained without simulation by regressing conditional vector fields."},
+    {"paper": "alphafold2", "type": "finding", "text": "Predicted structures reached accuracy competitive with experiment for most targets in the CASP14 assessment."},
+    {"paper": "rfdiffusion", "type": "finding", "text": "Designed binders and symmetric assemblies were validated experimentally, including by cryo-EM."},
+    {"paper": "rfdiffusion", "type": "limitation", "text": "Generated backbones still need a separate sequence design step."},
+    {"paper": "esm2", "type": "finding", "text": "Atomic-level structure information emerges in language model representations as model scale grows."}
+  ],
+  "concept_maps": [
+    {
+      "paper": "ddpm",
+      "concepts": [
+        {"name": "Diffusion Models", "kind": "method", "role": "introduces", "in_paper": "Defines a forward noising chain and a learned reverse chain.", "definition": "Generative models that learn to reverse a gradual noising process.", "aliases": ["denoising diffusion"]},
+        {"name": "Denoising Score Matching", "kind": "theory", "role": "uses", "in_paper": "The noise-prediction loss is shown to be equivalent to it.", "definition": "Learning the score of a noised data distribution by denoising.", "aliases": []}
+      ],
+      "relations": [
+        {"source": "Diffusion Models", "target": "Denoising Score Matching", "type": "uses", "evidence": "The simplified objective resembles denoising score matching over many noise levels."}
+      ]
+    },
+    {
+      "paper": "score_sde",
+      "concepts": [
+        {"name": "Diffusion Models", "kind": "method", "role": "extends", "in_paper": "Recast as discretisations of an SDE.", "definition": "", "aliases": []},
+        {"name": "Score Function", "kind": "theory", "role": "introduces", "in_paper": "The reverse-time SDE depends only on the score.", "definition": "Gradient of the log density of the data distribution.", "aliases": ["score"]},
+        {"name": "Denoising Score Matching", "kind": "theory", "role": "uses", "in_paper": "Used to train the time-dependent score model.", "definition": "", "aliases": []}
+      ],
+      "relations": [
+        {"source": "Score Function", "target": "Diffusion Models", "type": "part_of", "evidence": "The reverse process is driven by the learned score."},
+        {"source": "Denoising Score Matching", "target": "Score Function", "type": "addresses", "evidence": "The score model is trained with denoising score matching."}
+      ]
+    },
+    {
+      "paper": "flow_matching",
+      "concepts": [
+        {"name": "Flow Matching", "kind": "method", "role": "introduces", "in_paper": "Regresses conditional vector fields along fixed probability paths.", "definition": "Simulation-free training of continuous normalizing flows.", "aliases": []},
+        {"name": "Diffusion Models", "kind": "method", "role": "background", "in_paper": "Diffusion paths are one instance of its probability paths.", "definition": "", "aliases": []}
+      ],
+      "relations": [
+        {"source": "Flow Matching", "target": "Diffusion Models", "type": "alternative_to", "evidence": "Optimal-transport paths give straighter trajectories than diffusion paths."}
+      ]
+    },
+    {
+      "paper": "rfdiffusion",
+      "concepts": [
+        {"name": "Diffusion Models", "kind": "method", "role": "uses", "in_paper": "A denoising diffusion model over protein backbone frames.", "definition": "", "aliases": []},
+        {"name": "Protein Design", "kind": "task", "role": "evaluates", "in_paper": "Binders, symmetric oligomers and enzyme scaffolds.", "definition": "Creating new protein sequences or structures with a desired function.", "aliases": ["de novo protein design"]}
+      ],
+      "relations": [
+        {"source": "Diffusion Models", "target": "Protein Design", "type": "addresses", "evidence": "Backbones are generated by iterative denoising."}
+      ]
+    },
+    {
+      "paper": "alphafold2",
+      "concepts": [
+        {"name": "Protein Structure Prediction", "kind": "task", "role": "evaluates", "in_paper": "Predicts 3D coordinates from sequence and alignments.", "definition": "Predicting a protein's 3D structure from its amino-acid sequence.", "aliases": []}
+      ],
+      "relations": []
+    }
+  ],
+  "conversations": [
+    {
+      "key": "diffusion_vs_flow",
+      "title": "How does flow matching relate to diffusion?",
+      "started_by": "demo_alice",
+      "messages": [
+        {"role": "user", "content": "How does @paper:\"Flow Matching for Generative Modeling\" relate to DDPM?", "papers": ["flow_matching", "ddpm"]},
+        {"role": "assistant", "content": "Flow matching trains a vector field along fixed probability paths. A diffusion path is one such path, so DDPM-style training is a special case; optimal-transport paths are straighter and need fewer sampling steps.", "papers": ["flow_matching", "ddpm"]}
+      ]
+    }
+  ]
+}
