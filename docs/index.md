@@ -106,8 +106,10 @@ by author, year and kind of concept.
 
 ### Ask your whole library
 
-The knowledge chat answers from your papers and cites them. Narrow it with `@project:`,
-`@topic:` or `@paper:`, or let it search the web too.
+The knowledge chat answers from your papers and cites them; a citation opens the paper
+beside the chat. Answers can carry concept cards (formulas, plots, animations) and 3D
+protein structures you can rotate. Narrow a question with `@project:`, `@topic:` or
+`@paper:`, branch off from any question, or let it search the web too.
 
 [Knowledge chat :octicons-arrow-right-24:](user-guide/knowledge-features.md#knowledge-chat)
 </div>
