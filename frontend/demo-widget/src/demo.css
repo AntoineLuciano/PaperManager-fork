@@ -143,7 +143,7 @@
 }
 
 /* ---------- inside a host frame (the host draws the window) ----------- */
-:host([data-framed]) .pmd.kchat { border: 0; border-radius: 0 0 14px 14px; box-shadow: none; }
+:host([data-framed]) .pmd.kchat { border: 0; border-radius: 14px; box-shadow: none; }
 /* the host page has its own menu of examples: no bar here, a window of a fixed height */
 :host([data-menu]) .pmd-bar { display: none; }
 :host([data-menu]) .pmd.kchat { height: 640px; }
