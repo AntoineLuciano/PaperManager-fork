@@ -1,5 +1,10 @@
 # Hosting your own PaperManager
 
+!!! tip "Easiest: let your coding agent do it"
+    Tell Claude Code, Codex or another coding agent: *"Set up PaperManager for me by following
+    https://github.com/NiklasAbraham/PaperManager/blob/main/DEPLOY.md"*. It asks a few questions
+    and runs the local setup below for you. See [Set up with your agent](agent-setup.md).
+
 This guide sets up your own instance with your own database and your own keys. You can run it on
 your own computer (localhost) or on Heroku. Both use the same container image,
 `Dockerfile.selfhost`. It holds the React frontend, served by nginx, and the FastAPI backend, and
@@ -14,9 +19,9 @@ a remote GPU machine). Don't use it. Use `docker-compose.selfhost.yml` or `herok
 | Thing | Required? | Used for |
 |---|---|---|
 | Git and Docker (Docker Desktop on macOS/Windows) | yes | building and running the app |
-| A Google account plus a Google Cloud project | **yes** | PDFs are stored in your Google Drive; uploading fails without it |
-| An Anthropic API key ([console.anthropic.com](https://console.anthropic.com)) | strongly recommended | summaries, paper chat, Knowledge Chat, topic suggestions |
-| An OpenAI-compatible endpoint (e.g. OpenRouter) | optional | the "Gemma (LiteLLM)" model option, claim extraction |
+| An Anthropic API key ([console.anthropic.com](https://console.anthropic.com)) **or** an OpenAI API key ([platform.openai.com](https://platform.openai.com/api-keys)) | one of them | summaries, topics, chat. With Anthropic the fast tasks run on Claude Haiku 4.5; with OpenAI everything runs on GPT-5 mini |
+| A Google account plus a Google Cloud project | only for Drive storage, and always on Heroku | PDFs in Google Drive. Locally, `STORAGE_BACKEND=local` keeps them in a Docker volume |
+| An OpenAI-compatible endpoint (LiteLLM, OpenRouter, Ollama) | optional | runs the fast tasks on your own model |
 | A Heroku account plus the Heroku CLI | only for Heroku | hosting |
 | A Neo4j AuraDB Free instance ([console.neo4j.io](https://console.neo4j.io)) | only for Heroku | the database (locally, Docker runs Neo4j for you) |
 
@@ -39,8 +44,9 @@ NEO4J_PASSWORD=<any long random string>        # locally: Docker creates the DB 
 JWT_SECRET_KEY=<output of: openssl rand -hex 32>
 DEFAULT_USER_NAME=<your login name>             # the owner/admin account
 DEFAULT_USER_PASSWORD=                          # leave empty; you set it in step 4
-ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_DRIVE_FOLDER_ID=<from step 2>
+ANTHROPIC_API_KEY=sk-ant-...                    # or OPENAI_API_KEY=sk-...
+STORAGE_BACKEND=local                           # or drive, with GOOGLE_DRIVE_FOLDER_ID from step 2
+UI_ACCENT=violet                                # or blue, teal, green, amber, rose, slate, #RRGGBB
 
 # The maintainer's private infrastructure: switch it off
 DOCLING_MODE=local
@@ -50,7 +56,10 @@ LITELLM_ENDPOINT=
 LITELLM_EMBED_MODEL=
 ```
 
-For the optional Gemma model, point LiteLLM at any OpenAI-compatible API, for example
+Keep comments on their own line in the real file: Docker reads `KEY=   # note` as the value
+`# note`. The comments above are only there to explain each line.
+
+For your own model on the fast tasks, point LiteLLM at any OpenAI-compatible API, for example
 `LITELLM_ENDPOINT=https://openrouter.ai/api/v1`, `LITELLM_API_KEY=<openrouter key>`,
 `LITELLM_MODEL=google/gemma-3-27b-it`.
 
@@ -61,6 +70,10 @@ the output of `claude setup-token` (from [Claude Code](https://claude.com/claude
 `CLAUDE_CODE_OAUTH_TOKEN`. Never list other people there.
 
 ## Step 2: Google Drive access (once, on your own computer)
+
+Skip this step locally with `STORAGE_BACKEND=local`. On Heroku it is required, because Heroku
+has no disk to keep files on. For Drive locally, also uncomment the two `credentials.json` /
+`token.json` lines in `docker-compose.selfhost.yml`.
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project.
    Open **APIs & Services → Library**, then enable the **Google Drive API**.

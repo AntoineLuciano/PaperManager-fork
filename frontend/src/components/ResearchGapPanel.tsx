@@ -2,13 +2,14 @@ import { useState } from "react";
 import { findResearchGaps } from "../api/client";
 import ReactMarkdown from "react-markdown";
 import { mdPlugins } from "../lib/markdown";
+import { fastModelLabel } from "../lib/instance";
 
 type Model = "claude" | "claude-work" | "litellm";
 
 const MODEL_LABELS: Record<Model, string> = {
   claude: "Claude",
   "claude-work": "Claude (Work)",
-  litellm: "Gemma (LiteLLM)",
+  get litellm() { return fastModelLabel(); },
 };
 
 interface Props {

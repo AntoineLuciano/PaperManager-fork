@@ -85,6 +85,7 @@ exclude_docs: |
 nav:
   - Home: index.md
   - Get started:
+    - Set up with your agent: agent-setup.md
     - First steps: user-guide/first-steps.md
     - Hosting your own: self_hosting.md
     - Local development: user-guide/getting-started.md

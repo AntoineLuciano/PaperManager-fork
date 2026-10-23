@@ -13,6 +13,7 @@ from services.user_ai_config import get_effective_ai_config
 from services.litellm_client import (
     WEB_SEARCH_TOOL_OPENAI,
     chat_completion,
+    fast_provider,
     get_litellm_client,
     parse_tool_args,
     resolve_chat_model,
@@ -236,13 +237,23 @@ def chat_with_paper_litellm(
 ) -> str:
     """Answer *question* about a paper using LiteLLM (Gemma via proxy).
     Uses tool calling to allow web searches when the model supports it."""
-    client = get_litellm_client()
-    model = settings.litellm_model
-
+    model = resolve_chat_model(None)
     system = _load_prompt("chat_system.txt").format(
         title=paper_title or "(unknown)",
         text=paper_text[:12000],
     )
+    if fast_provider() == "anthropic":
+        # Fast model is Haiku on the server's Anthropic key, with the same web-search loop as Claude.
+        client = anthropic.Anthropic(
+            api_key=settings.anthropic_api_key.strip(),
+            base_url=_ANTHROPIC_BASE_URL,
+            http_client=anthropic.DefaultHttpxClient(verify=_ssl_verify()),
+        )
+        messages_a: list[dict[str, Any]] = list(history or [])
+        messages_a.append({"role": "user", "content": question})
+        return _run_claude_with_tools(client, model, system, messages_a, max_tokens=2048)
+
+    client = get_litellm_client()
     messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
     for msg in (history or []):
         messages.append({"role": msg["role"], "content": msg["content"]})

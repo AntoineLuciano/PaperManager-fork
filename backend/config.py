@@ -69,6 +69,24 @@ class Settings(BaseSettings):
     rate_limit_exempt_paths: str = "/docs,/redoc,/openapi.json"
     rate_limit_auth_paths: str = "/auth/login,/auth/register,/auth/admin/create-user"
 
+    # OpenAI (optional): used for the fast tasks when no LiteLLM proxy is set.
+    openai_api_key: str = ""
+
+    # Which provider runs the fast tasks (summaries, topics, claims, concept map, the
+    # "fast model" chat option): "auto", "litellm", "anthropic" or "openai".
+    # "auto" takes the first one configured, in that order (services/litellm_client.py).
+    ai_provider: str = "auto"
+    # Model for the fast tasks; empty = the provider's default (Haiku, GPT-5 mini, LITELLM_MODEL).
+    fast_model: str = ""
+
+    # Look: accent colour as a hex value or a preset name (violet, blue, teal, green, amber, rose, slate).
+    ui_accent: str = "violet"
+
+    # Where PDFs and figure images go: "auto" (Drive when it is configured, else local),
+    # "drive" or "local". Local files live in LOCAL_STORAGE_DIR (a Docker volume).
+    storage_backend: str = "auto"
+    local_storage_dir: str = "/app/data/files"
+
     # LiteLLM proxy (replaces local Ollama)
     litellm_endpoint: str = ""
     litellm_api_key: str = ""
@@ -85,7 +103,7 @@ class Settings(BaseSettings):
     semantic_scholar_api_key: str = ""
 
     # Docling: "local" (in-process, needs docling package) or "on_demand" (GPU via Inference Manager)
-    docling_mode: str = "on_demand"
+    docling_mode: str = "local"
     inference_manager_url: str = ""
     docling_remote_host: str = ""
     docling_host_port: int = 8004

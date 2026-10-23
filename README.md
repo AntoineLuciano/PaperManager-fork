@@ -7,7 +7,7 @@ one Neo4j knowledge graph you can search and chat with.
 
 **[Project page with a full tour](https://niklas-abraham.de/projects/papermanager/)** ·
 **[Documentation](https://niklasabraham.github.io/PaperManager/)** ·
-**[Self-hosting guide](docs/self_hosting.md)**
+**[Set up with your agent](DEPLOY.md)**
 
 ![Paper view: the PDF of the EDM paper next to an animated visualisation of the probability flow ODE](docs/img/screenshots/concepts.webp)
 
@@ -43,23 +43,35 @@ one Neo4j knowledge graph you can search and chat with.
 
 ---
 
-## Quick start (Docker)
+## Quick start: let your coding agent set it up
 
-You need Git, Docker, a Google account (PDFs are stored in your Google Drive) and, for the AI
-features, an [Anthropic API key](https://console.anthropic.com).
+Open [Claude Code](https://claude.com/claude-code), [Codex](https://github.com/openai/codex) or
+any other coding agent and say:
+
+> Set up PaperManager for me by following
+> https://github.com/NiklasAbraham/PaperManager/blob/main/DEPLOY.md
+
+It asks for your login name, your AI key (Anthropic **or** OpenAI, one is enough), where to keep
+PDFs and an accent colour. Then it writes `.env`, starts everything with Docker and checks that
+it works. No Google account, GPU or LLM proxy needed. The fast tasks run on Claude Haiku 4.5 or
+GPT-5 mini automatically, depending on the key you give it.
+
+### By hand
+
+You need Git, Docker and an [Anthropic](https://console.anthropic.com) or
+[OpenAI](https://platform.openai.com/api-keys) API key.
 
 ```bash
 git clone https://github.com/NiklasAbraham/PaperManager.git
 cd PaperManager
-cp .env.example .env        # set NEO4J_PASSWORD, JWT_SECRET_KEY, DEFAULT_USER_NAME,
-                            # ANTHROPIC_API_KEY, GOOGLE_DRIVE_FOLDER_ID, DOCLING_MODE=local
-# one-time Google Drive sign-in: see docs/self_hosting.md, step 2
+cp .env.example .env        # set DEFAULT_USER_NAME, JWT_SECRET_KEY, NEO4J_PASSWORD and one API key
 docker compose -f docker-compose.selfhost.yml up -d --build
 docker compose -f docker-compose.selfhost.yml exec app python scripts/create_default_user.py
+docker compose -f docker-compose.selfhost.yml exec app python scripts/check_setup.py
 ```
 
-Open **http://localhost:8080**. The [self-hosting guide](docs/self_hosting.md) covers every
-setting, Google Drive, Heroku hosting and troubleshooting.
+Open **http://localhost:8080**. [DEPLOY.md](DEPLOY.md) explains every choice. The
+[self-hosting guide](docs/self_hosting.md) covers Google Drive storage, Heroku and servers.
 
 ### Development setup
 
@@ -78,10 +90,10 @@ Tests: `cd backend && pytest` and `cd frontend && npm test`.
 ## Architecture
 
 ```
-React (Vite, Tailwind) ──► FastAPI ──► Neo4j          the knowledge graph
-MCP clients (Claude)  ──►    │    ──► Google Drive    PDFs and figures
-                             │    ──► Claude / LiteLLM language models
-                             │    ──► Docling         layout, figures, tables
+React (Vite, Tailwind) ──► FastAPI ──► Neo4j                        the knowledge graph
+MCP clients (Claude)  ──►    │    ──► local disk or Google Drive   PDFs and figures
+                             │    ──► Claude / OpenAI / LiteLLM    language models
+                             │    ──► Docling                      layout, figures, tables
                              └──► Semantic Scholar · CrossRef · arXiv
 ```
 

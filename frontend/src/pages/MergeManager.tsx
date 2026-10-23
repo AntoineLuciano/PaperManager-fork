@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fastModelLabel } from "../lib/instance";
 import { scanDuplicates, executeMerge, type DuplicatePair } from "../api/client";
 
 type Model = "litellm" | "claude" | "none";
@@ -91,7 +92,7 @@ export default function MergeManager() {
                     : "bg-white text-gray-600 hover:bg-gray-50"
                 }`}
               >
-                {m === "litellm" ? "Gemma (LiteLLM)" : m === "claude" ? "Claude Haiku" : "None (similarity only)"}
+                {m === "litellm" ? fastModelLabel() : m === "claude" ? "Claude Haiku" : "None (similarity only)"}
               </button>
             ))}
           </div>

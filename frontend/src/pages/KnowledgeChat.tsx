@@ -289,6 +289,10 @@ export default function KnowledgeChat() {
   const [model, setModel] = useState<ChatModel>(
     settings.knowledgeChatDefaultModel === "ollama" ? "litellm" : settings.knowledgeChatDefaultModel as ChatModel,
   );
+  // The saved default may be a Claude option this user has no key for: fall back to one they have.
+  useEffect(() => {
+    if (!models.includes(model)) setModel(models[0]);
+  }, [models, model]);
   const [useWeb, setUseWeb] = useState<boolean>(settings.knowledgeChatUseWeb);
   const [autoConcepts, setAutoConceptsState] = useState(readAuto);
   const [attached, setAttached] = useState<AttachedPaper[]>([]);

@@ -122,7 +122,7 @@ app.add_middleware(Neo4jReconnectMiddleware)
 
 
 # Paths an anonymous browser may call: the login flow, health checks and the API docs.
-PUBLIC_PATHS = {"/health", "/auth/login", "/auth/logout", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
+PUBLIC_PATHS = {"/health", "/auth/instance", "/auth/login", "/auth/logout", "/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"}
 
 
 class RequireLoginMiddleware(BaseHTTPMiddleware):
@@ -229,6 +229,24 @@ def list_litellm_models():
     except Exception:
         from config import settings
         return [settings.litellm_model]
+
+
+@app.get("/auth/instance")
+def instance_info():
+    """Non-secret instance settings from .env that the app needs before login:
+    the accent colour and which models are set up."""
+    from config import settings
+    from services.drive import uses_local_storage
+    from services.litellm_client import fast_model, fast_model_label, fast_provider
+
+    return {
+        "accent": settings.ui_accent.strip() or "violet",
+        "fast_provider": fast_provider(),
+        "fast_model": fast_model(),
+        "fast_model_label": fast_model_label(),
+        "anthropic": bool(settings.anthropic_api_key.strip()),
+        "storage": "local" if uses_local_storage() else "drive",
+    }
 
 
 @app.get("/health", response_model=HealthResponse)

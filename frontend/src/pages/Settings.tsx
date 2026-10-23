@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { fastModelLabel } from "../lib/instance";
 import { useAppSettings, type AppSettings, DEFAULT_SUMMARY_INSTRUCTIONS } from "../contexts/SettingsContext";
 import { apiFetch, deleteDebugPapers, countDebugPapers, exportRdf, exportCsv, exportSnapshot, importRdf, importSnapshot, validateSnapshot, clearPapers, seedDefaults, listLitellmModels, getMyAiKeyStatus, updateMyAiKeys, type MyAiKeyStatus, type SnapshotValidation } from "../api/client";
 
@@ -273,7 +274,7 @@ export default function Settings() {
             value={settings.figureCaptionMethod}
             options={[
               { value: "docling", label: "Docling (AI layout)" },
-              { value: "litellm", label: "LiteLLM (Gemma)" },
+              { value: "litellm", label: fastModelLabel() },
               { value: "claude-vision", label: "Claude Vision" },
             ]}
             onChange={(v) => update({ figureCaptionMethod: v as AppSettings["figureCaptionMethod"] })}
@@ -283,7 +284,7 @@ export default function Settings() {
 
       {/* ── Books & Chapters ── */}
       <Section title="Books & Chapters" description="Settings for chapter detection and AI summarisation.">
-        <Row label="Summary model" description="Model used to generate per-chapter summaries. 'Claude Work' uses your enterprise gateway; 'Claude' uses the personal API key; LiteLLM models use the hosted Gemma proxy.">
+        <Row label="Summary model" description="Model used to generate per-chapter summaries. 'Claude Work' uses your enterprise gateway; 'Claude' uses the personal API key; the other models are the server's fast model (FAST_MODEL in .env).">
           {(() => {
             const CLAUDE_OPTIONS = [
               { value: "claude-work",              label: "Claude Work (Opus)" },
@@ -364,7 +365,7 @@ export default function Settings() {
             options={[
               { value: "claude",      label: "Claude" },
               { value: "claude-work", label: "Claude (Work)" },
-              { value: "litellm",      label: "Gemma (LiteLLM)" },
+              { value: "litellm",      label: fastModelLabel() },
             ]}
             onChange={(v) => update({ knowledgeChatDefaultModel: v as AppSettings["knowledgeChatDefaultModel"] })}
           />
@@ -421,7 +422,7 @@ export default function Settings() {
           />
         </Row>
 
-        <Row label="Claims extraction model" description="Model used to extract claims. Claude Haiku is fast and cheap; LiteLLM models use the hosted Gemma proxy.">
+        <Row label="Claims extraction model" description="Model used to extract claims. Claude Haiku is fast and cheap; the other models are the server's fast model (FAST_MODEL in .env).">
           {(() => {
             const CLAUDE_OPTIONS = [
               { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },

@@ -16,6 +16,7 @@ import UploadConfirmModal from "../components/UploadConfirmModal";
 import OnboardingModal from "../components/OnboardingModal";
 import { useAppSettings } from "../contexts/SettingsContext";
 import { notify } from "../lib/notify";
+import { fastModelLabel, instanceInfo } from "../lib/instance";
 import type { Paper, Person, Topic, Tag, Reference, Figure, PaperTable, GraphData, ParsedMeta, T_IngestOut, Claim, RelatedPaper, Annotation, AnnotationColor, Concept, ConceptsBackend, ConceptGeneration } from "../types";
 
 const PAPER_GRAPH_NODE_COLORS: Record<string, string> = {
@@ -190,7 +191,9 @@ export default function PaperDetail() {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [claimsLoaded, setClaimsLoaded] = useState(false);
   const [extractingClaims, setExtractingClaims] = useState(false);
-  const [claimsModel, setClaimsModel] = useState<"claude" | "litellm">("claude");
+  const [claimsModel, setClaimsModel] = useState<"claude" | "litellm">(
+    () => (instanceInfo()?.anthropic === false ? "litellm" : "claude"),
+  );
   // Authors (meta tab)
   const [newAuthorName, setNewAuthorName] = useState("");
   const [addingAuthor, setAddingAuthor] = useState(false);
@@ -703,7 +706,11 @@ export default function PaperDetail() {
   if (!paper) return <div className="p-8 text-sm text-gray-400">Loading…</div>;
 
   const BASE        = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
-  const driveUrl    = paper.drive_file_id ? `https://drive.google.com/file/d/${paper.drive_file_id}/view` : null;
+  // Files kept on the server's own disk (STORAGE_BACKEND=local) have "local-" ids and open via the API.
+  const localFile   = Boolean(paper.drive_file_id?.startsWith("local-"));
+  const driveUrl    = paper.drive_file_id
+    ? (localFile ? `${BASE}/papers/${paper.id}/pdf` : `https://drive.google.com/file/d/${paper.drive_file_id}/view`)
+    : null;
   const driveEmbed  = paper.drive_file_id ? `${BASE}/papers/${paper.id}/pdf` : null;
 
   const cycleStatus = async () => {
@@ -1062,7 +1069,7 @@ export default function PaperDetail() {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                 </svg>
-                Open in Drive
+                {localFile ? "Open PDF" : "Open in Drive"}
               </a>
             )}
           </div>
@@ -2438,7 +2445,7 @@ export default function PaperDetail() {
                           onClick={() => setClaimsModel(m)}
                           className={`px-2.5 py-1 ${claimsModel === m ? "bg-violet-600 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
                         >
-                          {m === "claude" ? "Claude" : "Gemma (LiteLLM)"}
+                          {m === "claude" ? "Claude" : fastModelLabel()}
                         </button>
                       ))}
                     </div>
