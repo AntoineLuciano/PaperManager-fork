@@ -101,6 +101,8 @@ def same_person_name(a: str | None, b: str | None) -> bool:
     if not ga or not gb:
         return True
     x, y = ga[0], gb[0]
+    if "".join(ga) == "".join(gb):  # "Ya-Nan" ~ "Yanan"
+        return True
     if x == y or any(x in n and y in n for n in _NICKNAMES):
         return True
     return (len(x) == 1 or len(y) == 1) and x[0] == y[0]
