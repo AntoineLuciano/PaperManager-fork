@@ -141,7 +141,8 @@ def _work_authorships(doi: str) -> tuple:
     )
 
 
-def _author_works(author_id: str, limit: int = 600) -> list[dict]:
+@lru_cache(maxsize=256)
+def _author_works(author_id: str, limit: int = 600) -> tuple:
     works, cursor = [], "*"
     while cursor and len(works) < limit:
         page = _openalex("/works", filter=f"author.id:{author_id}", select="id,doi,title,publication_year,cited_by_count",
@@ -150,7 +151,7 @@ def _author_works(author_id: str, limit: int = 600) -> list[dict]:
             break
         works += page.get("results") or []
         cursor = (page.get("meta") or {}).get("next_cursor")
-    return works
+    return tuple(works)
 
 
 def _short_id(openalex_url: str | None) -> str | None:
@@ -179,16 +180,20 @@ def _check_papers(name: str, papers: list[dict]) -> tuple[list[dict], Counter]:
     return verdicts, votes
 
 
-def _resolve_author(person: dict, votes: Counter) -> tuple[str | None, str]:
+def _resolve_author(person: dict, votes: Counter, papers: list[dict]) -> tuple[str | None, str]:
     if person.get("openalex_id"):
         return person["openalex_id"], "stored"
     if votes:
         return _short_id(votes.most_common(1)[0][0]), "papers"
-    # No paper to anchor on: fall back to the best name match, flagged as weak.
+    # No authorship to anchor on: a namesake is accepted only if one of the
+    # person's library papers is among its works (common names have many homonyms).
     res = _openalex("/authors", search=person.get("name", ""), **{"per-page": 5}) or {}
     for a in res.get("results") or []:
-        if same_person_name(person.get("name"), a.get("display_name")):
-            return _short_id(a["id"]), "name-only"
+        if not same_person_name(person.get("name"), a.get("display_name")):
+            continue
+        titles = [w.get("title") for w in _author_works(_short_id(a["id"]))]
+        if any(_same_title(p["title"], t) for p in papers for t in titles):
+            return _short_id(a["id"]), "name+title"
     return None, "not-found"
 
 
@@ -232,7 +237,16 @@ def fetch_orcid_cv(orcid_id: str) -> dict:
         {"name": u.get("url-name"), "url": (u.get("url") or {}).get("value")}
         for u in (person.get("researcher-urls") or {}).get("researcher-url") or []
     ]
+    dois, titles = set(), []
+    for grp in (acts.get("works") or {}).get("group") or []:
+        for ws in grp.get("work-summary") or []:
+            titles.append(((ws.get("title") or {}).get("title") or {}).get("value"))
+            for ext in (ws.get("external-ids") or {}).get("external-id") or []:
+                if ext.get("external-id-type") == "doi" and ext.get("external-id-value"):
+                    dois.add(_openalex_doi(ext["external-id-value"]))
     return {
+        "work_dois": dois,
+        "work_titles": [t for t in titles if t],
         "name": " ".join(x for x in ((name.get("given-names") or {}).get("value"),
                                      (name.get("family-name") or {}).get("value")) if x),
         "biography": ((person.get("biography") or {}).get("content") or "").strip() or None,
@@ -392,7 +406,7 @@ def build_person_cv(driver, person_id: str, scrape_homepage: bool = True) -> dic
     papers = _library_papers(driver, person_id)
 
     verdicts, votes = _check_papers(name, papers)
-    author_id, how = _resolve_author(person, votes)
+    author_id, how = _resolve_author(person, votes, papers)
     author = _openalex(f"/authors/{author_id}") if author_id else None
     works = _author_works(author_id) if author else []
 
@@ -407,6 +421,10 @@ def build_person_cv(driver, person_id: str, scrape_homepage: bool = True) -> dic
     orcid = fetch_orcid_cv(m.group(1)) if m else {}
     if orcid and orcid.get("name") and not same_person_name(name, orcid["name"]):
         orcid = {}  # ORCID record of someone else
+    if orcid and orcid["work_titles"] and not any(
+            _openalex_doi(p.get("doi")) in orcid["work_dois"]
+            or any(_same_title(p["title"], t) for t in orcid["work_titles"]) for p in papers):
+        orcid = {}  # lists works, none of them ours: a homonym merged into the OpenAlex profile
 
     wiki = fetch_wikidata(author_id if author else None, m.group(1) if (m and orcid) else None)
     homepage = person.get("website_url") or _pick_homepage(orcid.get("urls") or []) or wiki.get("website")
@@ -420,7 +438,7 @@ def build_person_cv(driver, person_id: str, scrape_homepage: bool = True) -> dic
         status = "not-found"
     elif absent and len(absent) * 2 >= len(checked):
         status = "mismatch"
-    elif absent or how == "name-only":
+    elif absent:
         status = "partial"
     else:
         status = "ok"

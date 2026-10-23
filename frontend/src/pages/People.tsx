@@ -1194,7 +1194,7 @@ function CvPanel({ cv, onRefresh, loading }: { cv: PersonCv | null; onRefresh: (
         <p className="mt-0.5 opacity-80">
           {cv.check.confirmed} of {cv.check.library_papers} library papers confirmed
           {cv.check.unverifiable > 0 && `, ${cv.check.unverifiable} not verifiable (no DOI)`}
-          {cv.check.resolved_by === "name-only" && " · profile matched by name only"}
+          {cv.check.resolved_by === "name+title" && " · profile matched by name and paper title"}
           {" · "}updated {new Date(cv.updated_at).toLocaleDateString()}
         </p>
         {cv.check.absent.length > 0 && (
