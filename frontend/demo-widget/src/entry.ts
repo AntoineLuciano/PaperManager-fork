@@ -2,7 +2,6 @@
  * Loader for the Knowledge Chat demo. The page already holds the whole demo, prerendered in a
  * declarative shadow root (see prerender.tsx), so nothing waits on this script. It
  *  - makes the cards in the open example live (the app chunk, loaded near the viewport),
- *  - opens each example at its highlight (the card), with the question pinned above it,
  *  - drives an optional menu in the host page (`data-pm-chat-menu="<selector>"` on the element,
  *    items marked `data-pm-chat-tab="<index>"`): click, tap, hover and arrow keys pick an example.
  * Browsers that do not parse declarative shadow roots get one made here from the same template.
@@ -23,35 +22,6 @@ function shadowOf(el: HTMLElement): ShadowRoot | null {
 const radios = (root: ShadowRoot) => Array.from(root.querySelectorAll<HTMLInputElement>('input.pmd-radio'));
 const current = (root: ShadowRoot) => Math.max(0, radios(root).findIndex((r) => r.checked));
 const panelOf = (root: ShadowRoot, i: number) => root.querySelector<HTMLElement>(`.pmd-panel[data-i="${i}"]`);
-
-/* --------------------------------------------------------- the highlight */
-// Scroll the example's transcript so its best card (a structure, else an animation, a plot, a
-// formula) sits just under the pinned question. An answer without cards opens at the top.
-const RANK = ['structure', '2d-anim', 'graph', 'formula', '2d-text'];
-function toHighlight(panel: HTMLElement | null, onlyIfUntouched = false) {
-  const scroller = panel?.querySelector<HTMLElement>('.kc-scroll');
-  const rank = (e: HTMLElement) => { const r = RANK.indexOf(e.dataset.type ?? ''); return r < 0 ? 9 : r; };
-  const target = Array.from(panel?.querySelectorAll<HTMLElement>('.pmd-island') ?? []).sort((a, b) => rank(a) - rank(b))[0];
-  if (!panel || !scroller || !target) return;
-  if (onlyIfUntouched && scroller.dataset.touched) return;
-  const question = panel.querySelector<HTMLElement>('.msg.user');
-  const offset = (question?.offsetHeight ?? 0) + 24;
-  const top = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - offset;
-  scroller.scrollTop = Math.max(0, top);
-}
-
-/** Keep each example at its highlight while its layout settles (stylesheet, fonts, stills, live
- *  cards), until the visitor scrolls it themselves. */
-function holdHighlights(root: ShadowRoot) {
-  root.querySelectorAll<HTMLElement>('.pmd-panel').forEach((panel) => {
-    const scroller = panel.querySelector<HTMLElement>('.kc-scroll'), thread = panel.querySelector<HTMLElement>('.thread');
-    if (!scroller || !thread) return;
-    const touch = () => { scroller.dataset.touched = '1'; };
-    ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach((e) => scroller.addEventListener(e, touch, { passive: true, once: true }));
-    toHighlight(panel);
-    if ('ResizeObserver' in window) new ResizeObserver(() => toHighlight(panel, true)).observe(thread);
-  });
-}
 
 /* -------------------------------------------------------------- the menu */
 function wireMenu(el: HTMLElement, root: ShadowRoot): () => void {
@@ -119,17 +89,17 @@ function boot(el: HTMLElement) {
   };
 
   const sync = wireMenu(el, root);
-  root.addEventListener('pmd-mounted', () => toHighlight(panelOf(root, current(root)), true));
   root.addEventListener('change', () => {
     const i = current(root);
     sync();
-    toHighlight(panelOf(root, i), true);
+    // Each example opens at its start: the paper, the question, then the answer.
+    const scroller = panelOf(root, i)?.querySelector<HTMLElement>('.kc-scroll');
+    if (scroller) scroller.scrollTop = 0;
     // In the chip row (narrow screens) bring the chosen tab into view, without moving the page.
     const tab = root.querySelector<HTMLElement>(`.pmd-tab[data-i="${i}"]`), row = tab?.parentElement;
     if (tab && row && row.scrollWidth > row.clientWidth) row.scrollTo({ left: tab.offsetLeft - row.offsetLeft - 14, behavior: 'smooth' });
   });
   sync();
-  holdHighlights(root);
 
   if (!('IntersectionObserver' in window)) { start(); return; }
   const near = new IntersectionObserver((entries) => {

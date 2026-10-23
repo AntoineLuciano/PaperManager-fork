@@ -115,7 +115,7 @@
 
 /* ---------- transcript ------------------------------------------------ */
 .pmd .kc-scroll { padding-top: 22px; overscroll-behavior: contain; }
-.pmd .kc-scroll > .thread { max-width: 800px; }
+.pmd .kc-scroll > .thread { max-width: 800px; margin: 0 auto; }
 .pmd .kc-topbar { min-height: 49px; }
 
 .pmd-paper {
@@ -144,18 +144,10 @@
 
 /* ---------- inside a host frame (the host draws the window) ----------- */
 :host([data-framed]) .pmd.kchat { border: 0; border-radius: 14px; box-shadow: none; }
-/* the host page has its own menu of examples: no bar here, a window of a fixed height */
+/* the host page has its own menu of examples: no bar here, and the window is as tall as the
+   host asks for with --pm-chat-height (inherited through the shadow root) */
 :host([data-menu]) .pmd-bar { display: none; }
-:host([data-menu]) .pmd.kchat { height: 640px; }
-
-/* the question stays pinned above the answer while it scrolls */
-.pmd .msg.user {
-  position: sticky; top: -22px; z-index: 4; margin: 0 0 14px; padding: 22px 0 10px; background: var(--raised);
-}
-.pmd .msg.user::after {
-  content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 18px; pointer-events: none;
-  background: linear-gradient(var(--raised), rgba(255, 255, 255, 0));
-}
+:host([data-menu]) .pmd.kchat { height: var(--pm-chat-height, 640px); }
 
 /* ---------- narrow: tabs become a row of chips above the transcript ---- */
 @container (max-width: 760px) {
@@ -181,9 +173,6 @@
   .pmd.kchat .msg.assistant { font-size: 14px; }
   .pmd .kc-concept-stage { height: 280px; }
   .pmd .kc-concept-2d-anim .kc-concept-stage { height: 300px; }
-}
-@container (max-width: 760px) {
-  :host([data-menu]) .pmd.kchat { height: 600px; }
 }
 @container (max-width: 480px) {
   .pmd-paper p { display: none; }
