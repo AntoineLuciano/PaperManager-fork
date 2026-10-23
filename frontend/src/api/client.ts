@@ -1,4 +1,4 @@
-import type { T_IngestOut, ParsedMeta, GraphData, Reference, Conversation, KnowledgeMessage, SseEvent, BulkSseEvent, Figure, PaperTable, LiteratureSseEvent, Paper, Chapter, Blog, BlogPost, Note, Annotation, AnnotationColor, VenueOut, Claim , IdeogramCaption, IdeogramSessionStatus, IdeogramGenerateBody, IdeogramGenerateResult, Concept, ConceptsBackend, ConceptGeneration, ConfCatalog, ConfStatus, ConfOverview, ConfInstRow, ConfInstitution, ConfTopic, ConfPaperDetail } from "../types";
+import type { PersonCv, T_IngestOut, ParsedMeta, GraphData, Reference, Conversation, KnowledgeMessage, SseEvent, BulkSseEvent, Figure, PaperTable, LiteratureSseEvent, Paper, Chapter, Blog, BlogPost, Note, Annotation, AnnotationColor, VenueOut, Claim , IdeogramCaption, IdeogramSessionStatus, IdeogramGenerateBody, IdeogramGenerateResult, Concept, ConceptsBackend, ConceptGeneration, ConfCatalog, ConfStatus, ConfOverview, ConfInstRow, ConfInstitution, ConfTopic, ConfPaperDetail } from "../types";
 import type { ConfSearch, ConfSearchTopic } from "../types";
 import type { SearchResponse, SearchSuggestions } from "../types";
 
@@ -1373,6 +1373,10 @@ export async function enrichPerson(personId: string): Promise<{
   message?: string;
 }> {
   return apiFetch(`/people/${personId}/enrich`, { method: "POST" });
+}
+
+export async function refreshPersonCv(personId: string): Promise<PersonCv> {
+  return apiFetch(`/people/${personId}/cv`, { method: "POST" });
 }
 
 export async function enrichAllPeople(): Promise<{ status: string; total_people: number }> {

@@ -2,11 +2,11 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   apiFetch, setPersonTracked,
-  enrichPerson, enrichAllPeople,
+  enrichPerson, enrichAllPeople, refreshPersonCv,
   addPersonTag, removePersonTag,
   getPersonNote, savePersonNote,
 } from "../api/client";
-import type { Person, Paper, Tag, Note, StartupRole } from "../types";
+import type { Person, PersonCv, Paper, Tag, Note, StartupRole } from "../types";
 import NoteEditor from "../components/NoteEditor";
 
 // ── Tag groups for the Q&A-style Tags tab ─────────────────────────────────────
@@ -417,7 +417,7 @@ export default function People() {
 
 // ── Person detail panel ──────────────────────────────────────────────────────
 
-type DetailTab = "overview" | "notes" | "tags";
+type DetailTab = "overview" | "cv" | "notes" | "tags";
 
 function PersonDetailPanel({ person, onChanged }: {
   person: PersonDetail;
@@ -439,6 +439,10 @@ function PersonDetailPanel({ person, onChanged }: {
   // Enrichment
   const [enriching, setEnriching]     = useState(false);
   const [enrichMsg, setEnrichMsg]     = useState("");
+
+  // CV
+  const [cvLoading, setCvLoading] = useState(false);
+  const [cvMsg, setCvMsg]         = useState("");
 
   // Tracking
   const [trackUpdating, setTrackUpdating] = useState(false);
@@ -525,6 +529,23 @@ function PersonDetailPanel({ person, onChanged }: {
     }
   };
 
+  const handleRefreshCv = async () => {
+    setCvLoading(true);
+    setCvMsg("");
+    try {
+      const cv = await refreshPersonCv(person.id);
+      setCvMsg(cv.check.status === "mismatch"
+        ? "CV found, but it does not match this person's papers — profile fields left unchanged"
+        : "CV updated");
+      onChanged();
+    } catch {
+      setCvMsg("CV update failed");
+    } finally {
+      setCvLoading(false);
+      setTimeout(() => setCvMsg(""), 5000);
+    }
+  };
+
   const handleAddTag = async () => {
     const name = newTag.trim();
     if (!name) return;
@@ -567,6 +588,10 @@ function PersonDetailPanel({ person, onChanged }: {
       {/* ── Header ── */}
       <div className="px-6 pt-6 pb-4 bg-white border-b border-gray-100 shrink-0">
         <div className="flex items-start justify-between gap-4">
+          {person.photo && (
+            <img src={person.photo} alt={person.name} title={person.photo_source}
+              className="w-16 h-16 rounded-full object-cover shrink-0 border border-gray-100" />
+          )}
           <div className="flex-1 min-w-0">
             {/* Name — inline editable */}
             {editingName ? (
@@ -610,6 +635,14 @@ function PersonDetailPanel({ person, onChanged }: {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 mt-1">
+            <button
+              onClick={handleRefreshCv}
+              disabled={cvLoading}
+              title="Rebuild the CV from OpenAlex, ORCID, Wikidata and the homepage, checked against this person's papers"
+              className="text-xs text-gray-400 hover:text-violet-600 transition-colors disabled:opacity-40 px-2 py-1 rounded border border-gray-200 hover:border-violet-300"
+            >
+              {cvLoading ? "…" : "↻ CV"}
+            </button>
             <button
               onClick={handleEnrich}
               disabled={enriching}
@@ -687,10 +720,13 @@ function PersonDetailPanel({ person, onChanged }: {
         {enrichMsg && (
           <p className="mt-2 text-xs text-violet-600">{enrichMsg}</p>
         )}
+        {cvMsg && (
+          <p className="mt-2 text-xs text-violet-600">{cvMsg}</p>
+        )}
 
         {/* Tab bar */}
         <div className="flex gap-4 mt-4">
-          {(["overview", "notes", "tags"] as const).map((t) => (
+          {(["overview", "cv", "notes", "tags"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -700,7 +736,10 @@ function PersonDetailPanel({ person, onChanged }: {
                   : "border-transparent text-gray-400 hover:text-gray-600"
               }`}
             >
-              {t}
+              {t === "cv" ? "CV" : t}
+              {t === "cv" && person.cv_status && (
+                <span className={`ml-1 inline-block w-1.5 h-1.5 rounded-full align-middle ${CV_STATUS[person.cv_status].dot}`} />
+              )}
               {t === "tags" && tags.length > 0 && (
                 <span className="ml-1 text-xs text-gray-400">({tags.length})</span>
               )}
@@ -842,6 +881,11 @@ function PersonDetailPanel({ person, onChanged }: {
               </section>
             ))}
           </div>
+        )}
+
+        {/* CV */}
+        {tab === "cv" && (
+          <CvPanel cv={tryParseCv(person.cv)} onRefresh={handleRefreshCv} loading={cvLoading} />
         )}
 
         {/* NOTES */}
@@ -1096,6 +1140,155 @@ function AddPaperLink({ personId, existingPapers, onAdded }: {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// ── CV tab ────────────────────────────────────────────────────────────────────
+
+const CV_STATUS: Record<NonNullable<Person["cv_status"]>, { label: string; dot: string; box: string }> = {
+  "ok":        { label: "Consistent with the library papers", dot: "bg-green-500", box: "bg-green-50 text-green-800 border-green-100" },
+  "partial":   { label: "Mostly consistent — see the papers below", dot: "bg-amber-400", box: "bg-amber-50 text-amber-800 border-amber-100" },
+  "mismatch":  { label: "Does not match the library papers — probably a homonym or a wrong author link", dot: "bg-red-500", box: "bg-red-50 text-red-800 border-red-100" },
+  "not-found": { label: "No profile found", dot: "bg-gray-300", box: "bg-gray-50 text-gray-600 border-gray-100" },
+  "no-papers": { label: "No papers in the library to check against", dot: "bg-gray-300", box: "bg-gray-50 text-gray-600 border-gray-100" },
+};
+
+function cvDates(e: { start?: string | null; end?: string | null }) {
+  if (!e.start && !e.end) return "";
+  return `${e.start ?? "?"} – ${e.end ?? "present"}`;
+}
+
+function CvPanel({ cv, onRefresh, loading }: { cv: PersonCv | null; onRefresh: () => void; loading: boolean }) {
+  const navigate = useNavigate();
+  if (!cv) {
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-10 text-center">
+        <p className="text-sm text-gray-400 mb-3">No CV yet.</p>
+        <button onClick={onRefresh} disabled={loading}
+          className="text-xs bg-violet-600 text-white px-3 py-1.5 rounded hover:bg-violet-700 disabled:opacity-50">
+          {loading ? "Building…" : "Build CV"}
+        </button>
+      </div>
+    );
+  }
+  const st = CV_STATUS[cv.check.status];
+  const m = cv.metrics;
+  const entries = (list: PersonCv["positions"]) => (
+    <ul className="space-y-1.5">
+      {list.map((e, i) => (
+        <li key={i} className="text-sm flex gap-3">
+          <span className="text-xs text-gray-400 font-mono w-28 shrink-0 pt-0.5">{cvDates(e)}</span>
+          <span className="text-gray-800">
+            {[e.role, e.department].filter(Boolean).join(", ")}
+            {(e.role || e.department) && e.organization ? " — " : ""}
+            <span className="font-medium">{e.organization}</span>
+            {e.place && <span className="text-gray-400"> ({e.place})</span>}
+            <span className="ml-1.5 text-[10px] text-gray-300 uppercase">{e.source}</span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+  return (
+    <div className="max-w-2xl mx-auto px-6 py-6 space-y-7">
+      <div className={`text-xs border rounded-lg px-3 py-2 ${st.box}`}>
+        <p className="font-medium">{st.label}</p>
+        <p className="mt-0.5 opacity-80">
+          {cv.check.confirmed} of {cv.check.library_papers} library papers confirmed
+          {cv.check.unverifiable > 0 && `, ${cv.check.unverifiable} not verifiable (no DOI)`}
+          {cv.check.resolved_by === "name-only" && " · profile matched by name only"}
+          {" · "}updated {new Date(cv.updated_at).toLocaleDateString()}
+        </p>
+        {cv.check.absent.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {cv.check.absent.map((a) => (
+              <li key={a.id}>
+                <button onClick={() => navigate(`/paper/${a.id}`)} className="underline hover:no-underline text-left">{a.title}</button>
+                <span className="opacity-70"> — listed authors: {a.listed_authors.join(", ")}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {(cv.current_position || cv.bio) && (
+        <section>
+          {cv.current_position && <p className="text-sm font-medium text-gray-900">{cv.current_position}</p>}
+          {cv.bio && <p className="text-sm text-gray-600 mt-1">{cv.bio}</p>}
+        </section>
+      )}
+
+      <section className="grid grid-cols-4 gap-2">
+        {([["Works", m.works], ["Citations", m.citations], ["h-index", m.h_index], ["i10-index", m.i10_index]] as const).map(([label, v]) => (
+          <div key={label} className="bg-gray-50 rounded-lg px-3 py-2">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</p>
+            <p className="text-lg font-semibold text-gray-800 tabular-nums">{v != null ? v.toLocaleString() : "—"}</p>
+          </div>
+        ))}
+      </section>
+
+      {cv.positions.length > 0 && (
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Positions</h3>
+          {entries(cv.positions)}
+        </section>
+      )}
+      {cv.education.length > 0 && (
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Education</h3>
+          {entries(cv.education)}
+        </section>
+      )}
+      {cv.affiliation_history.length > 0 && (
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Affiliations (from publications)</h3>
+          <ul className="space-y-1">
+            {cv.affiliation_history.map((a, i) => (
+              <li key={i} className="text-sm flex gap-3">
+                <span className="text-xs text-gray-400 font-mono w-28 shrink-0 pt-0.5">{a.years}</span>
+                <span className="text-gray-800">{a.institution}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {cv.topics.length > 0 && (
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Research topics</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {cv.topics.map((t) => (
+              <span key={t} className="text-xs bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full">{t}</span>
+            ))}
+          </div>
+        </section>
+      )}
+      {cv.top_works.length > 0 && (
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Most cited works</h3>
+          <ul className="space-y-1.5">
+            {cv.top_works.map((w, i) => (
+              <li key={i} className="text-sm flex gap-3">
+                <span className="text-xs text-gray-400 font-mono w-16 shrink-0 pt-0.5 text-right tabular-nums">{w.citations?.toLocaleString()}</span>
+                <span className="text-gray-800">
+                  {w.doi ? <a href={`https://doi.org/${w.doi}`} target="_blank" rel="noreferrer" className="hover:text-violet-700">{w.title}</a> : w.title}
+                  {w.year && <span className="text-gray-400"> ({w.year})</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <section className="flex flex-wrap gap-3 text-xs">
+        {Object.entries(cv.sources).filter(([, url]) => url).map(([name, url]) => (
+          <a key={name} href={url!} target="_blank" rel="noreferrer" className="text-violet-600 hover:text-violet-800 capitalize">{name} ↗</a>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function tryParseCv(json?: string | null): PersonCv | null {
+  if (!json) return null;
+  try { return JSON.parse(json) as PersonCv; } catch { return null; }
+}
 
 function tryParseSkills(json?: string | null): string[] {
   if (!json) return [];

@@ -10,6 +10,7 @@ from db.queries.notes import get_person_note, upsert_person_note, set_mentions
 from db.queries.tags import tag_person, untag_person, get_tags_for_person, get_or_create_tag
 from services.note_parser import parse_mentions
 from services.person_enrichment import enrich_person_by_id, enrich_all_people, enrich_person_from_papers_ollama
+from services.person_cv import build_person_cv, build_all_cvs
 from models.schemas import (
     PersonCreate, PersonUpdate, PersonOut, AuthorLink, InvolvesLink, SpecialtyLink,
     NoteBody, NoteOut, TagBody, PersonEnrichOut,
@@ -183,6 +184,22 @@ def enrich_all(background_tasks: BackgroundTasks):
     )
     background_tasks.add_task(enrich_all_people, driver)
     return {"status": "started", "total_people": needs_enrich}
+
+
+@people_router.post("/{person_id}/cv")
+def refresh_cv(person_id: str):
+    """Rebuild the person's CV from OpenAlex, ORCID and their homepage, checked against their papers."""
+    try:
+        return build_person_cv(get_driver(), person_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Person not found")
+
+
+@people_router.post("/cv-all")
+def refresh_all_cvs(background_tasks: BackgroundTasks, only_missing: bool = Query(True)):
+    """Build CVs in the background for every author (by default only those without one)."""
+    background_tasks.add_task(build_all_cvs, get_driver(), only_missing)
+    return {"status": "started"}
 
 
 # ── Paper ↔ Person relationships ──────────────────────────────────────────────

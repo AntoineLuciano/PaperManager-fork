@@ -20,6 +20,14 @@ def surname_key(name: str | None) -> tuple[str, str]:
     return (words[-1] if words else "", folded)
 
 
+# Heavy fields kept out of list responses; the person detail returns them.
+_LIST_EXCLUDED = ("cv", "photo")
+
+
+def _list_row(node) -> dict:
+    return {k: v for k, v in dict(node).items() if k not in _LIST_EXCLUDED}
+
+
 def create_person(driver: Driver, data: dict) -> dict:
     props = {
         "id": str(uuid.uuid4()),
@@ -76,7 +84,7 @@ def list_people(driver: Driver, tag: str | None = None) -> list[dict]:
             )
         rows = []
         for r in result:
-            d = dict(r["p"])
+            d = _list_row(r["p"])
             d["paper_count"] = r["paper_count"]
             rows.append(d)
         return sorted(rows, key=lambda d: surname_key(d.get("name")))
@@ -97,7 +105,7 @@ def list_people_without_tag(driver: Driver, tag: str) -> list[dict]:
         )
         rows = []
         for r in result:
-            d = dict(r["p"])
+            d = _list_row(r["p"])
             d["paper_count"] = r["paper_count"]
             rows.append(d)
         return sorted(rows, key=lambda d: surname_key(d.get("name")))
@@ -282,7 +290,7 @@ def list_tracked_people(driver: Driver) -> list[dict]:
     """Return all people with tracked=true."""
     with driver.session() as session:
         result = session.run("MATCH (p:Person {tracked: true}) RETURN p ORDER BY p.name")
-        return sorted((dict(r["p"]) for r in result), key=lambda d: surname_key(d.get("name")))
+        return sorted((_list_row(r["p"]) for r in result), key=lambda d: surname_key(d.get("name")))
 
 
 def update_person_props(driver: Driver, person_id: str, props: dict) -> dict | None:
