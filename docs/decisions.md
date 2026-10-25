@@ -136,7 +136,8 @@ refuses anonymous clients). Paper Copilot's lists cover the other venues and old
 
 ### bge-small on CPU through transformers, no new dependency
 `transformers` and `torch` are already installed for Docling. bge-small-en-v1.5 (33 M parameters)
-embeds a 6,500-paper conference in about two minutes on four CPU threads and needs no API key,
+embeds a 6,500-paper conference in two minutes from titles, or 3,000–6,000 papers with abstracts in
+7–15 minutes, on four CPU threads, in the background, and needs no API key,
 so the feature works in the default self-hosted setup.
 
 ### One area taxonomy for every conference, assigned zero-shot

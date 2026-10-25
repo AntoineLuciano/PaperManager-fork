@@ -51,7 +51,8 @@ indexes it in the background; the page shows the progress and fills in as it goe
 3. **Indexing**: every title and abstract is embedded with
    [bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) on the CPU, which gives the
    research areas and semantic topic search. About two minutes for NeurIPS 2026 (6,500 papers,
-   titles only so far), three for a conference with abstracts.
+   titles only so far); with abstracts 7–15 minutes (ACL 2025, 3,100 papers: 7 min; NeurIPS
+   2025, 5,900 papers: 14 min) on four CPU threads.
 
 A default set is loaded when the backend starts (see [Settings](#settings)), so the main
 conferences are ready without anyone waiting. **refresh** at the bottom of a conference page

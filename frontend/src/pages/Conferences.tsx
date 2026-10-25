@@ -69,7 +69,7 @@ function Landing() {
         <p className="mt-1 text-sm text-ink-2 max-w-3xl">
           Browse the accepted papers of the major ML, vision, NLP and robotics conferences by institution (rank, paper count,
           research-area mix, collaborators) or by topic (which universities and companies publish most on it, and the closest papers).
-          Pick a conference; ones not loaded yet are downloaded and indexed on this server in a minute or two.
+          Pick a conference; ones not loaded yet are downloaded and indexed on this server, which takes a few minutes.
         </p>
       </div>
       {error && <p className="text-sm text-coral">{error}</p>}
