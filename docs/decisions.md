@@ -118,3 +118,29 @@ Stricter limits on `/auth/login` to prevent brute-force attacks.
 Three services: Neo4j, FastAPI backend, Nginx-served React frontend.
 Traefik handles SSL (Let's Encrypt) and routing.
 Neo4j and backend are internal-only; only the Nginx container is internet-facing.
+
+---
+
+## 2026-10-25 — Conference explorer
+
+### Conference data on disk, not in Neo4j
+A conference is 3,000–9,000 papers and as many people; as Paper and Person nodes they would
+swamp the library, the duplicate scanner and the free-tier node limit. Each conference-year is a
+JSON file plus a float16 embedding matrix under `/data/conferences`; only "+ Library" writes to
+the graph.
+
+### Official miniconf feeds first, Paper Copilot for the rest
+NeurIPS, ICML, ICLR, CVPR, ICCV and ECCV publish every accepted paper with each author's
+institution as one JSON file, so no scraping and no OpenReview profile crawl (OpenReview's API
+refuses anonymous clients). Paper Copilot's lists cover the other venues and older years.
+
+### bge-small on CPU through transformers, no new dependency
+`transformers` and `torch` are already installed for Docling. bge-small-en-v1.5 (33 M parameters)
+embeds a 6,500-paper conference in about two minutes on four CPU threads and needs no API key,
+so the feature works in the default self-hosted setup.
+
+### One area taxonomy for every conference, assigned zero-shot
+24 hand-described areas instead of per-conference clustering: the same area has the same name
+and colour at every venue, so conferences can be compared. Embeddings are centred on the
+conference mean before assignment; without it the most generic area absorbed a fifth of NeurIPS.
+

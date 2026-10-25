@@ -95,6 +95,7 @@ nav:
     - Reading a paper: user-guide/paper-detail.md
     - Concepts, tour and concept map: user-guide/reading-tools.md
     - Knowledge chat and graph: user-guide/knowledge-features.md
+    - Conference explorer: user-guide/conferences.md
     - MCP server (Claude): user-guide/mcp-server.md
   - Technical reference:
     - Architecture: technical/architecture.md

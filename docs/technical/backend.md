@@ -161,6 +161,7 @@ Runs on startup. Creates:
 | `embeddings.py` | Generate Ollama (nomic-embed-text) embeddings stored on Paper nodes |
 | `person_enrichment.py` | Enrich Person nodes with affiliations and Semantic Scholar author data |
 | `web_search.py` | Web search helper used by research gaps and synthesis endpoints |
+| `conferences/` | Conference explorer (see `.specs/011_conferences.md`): `catalog.py` conference-years and sources, `sources.py` miniconf + Paper Copilot fetchers, `institutions.py` name normalisation and academia / industry, `areas.py` the 24-area taxonomy and zero-shot assignment, `embedder.py` bge-small-en-v1.5 on CPU, `store.py` build worker, on-disk datasets under `/data/conferences`, queries |
 
 ---
 

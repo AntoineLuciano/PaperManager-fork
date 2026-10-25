@@ -116,6 +116,21 @@ protein structures you can rotate. Narrow a question with `@project:`, `@topic:`
 ![Knowledge chat](img/screenshots/chat.webp)
 </div>
 
+<div class="pm-row pm-row--flip" markdown>
+<div markdown>
+
+### Who publishes what at NeurIPS, ICML, CVPR, ACL, ...
+
+Browse the accepted papers of 22 conference series by institution (rank, research-area mix,
+collaborators, every paper) or by topic: type one or paste an abstract and see which
+universities and companies publish most on it and the closest papers, one click from your
+library.
+
+[Conference explorer :octicons-arrow-right-24:](user-guide/conferences.md)
+</div>
+![Conference explorer](img/screenshots/conferences.webp)
+</div>
+
 ---
 
 ## Where to go next
@@ -143,7 +158,7 @@ protein structures you can rotate. Narrow a question with `@project:`, `@topic:`
 
     ---
 
-    The MCP server gives Claude Desktop and Claude Code 35 tools to search, read and edit
+    The MCP server gives Claude Desktop and Claude Code 38 tools to search, read and edit
     your library.
 
     [:octicons-arrow-right-24: MCP server](user-guide/mcp-server.md)

@@ -1,4 +1,4 @@
-import type { T_IngestOut, ParsedMeta, GraphData, Reference, Conversation, KnowledgeMessage, SseEvent, BulkSseEvent, Figure, PaperTable, LiteratureSseEvent, Paper, Chapter, Blog, BlogPost, Note, Annotation, AnnotationColor, VenueOut, Claim , IdeogramCaption, IdeogramSessionStatus, IdeogramGenerateBody, IdeogramGenerateResult, Concept, ConceptsBackend, ConceptGeneration } from "../types";
+import type { T_IngestOut, ParsedMeta, GraphData, Reference, Conversation, KnowledgeMessage, SseEvent, BulkSseEvent, Figure, PaperTable, LiteratureSseEvent, Paper, Chapter, Blog, BlogPost, Note, Annotation, AnnotationColor, VenueOut, Claim , IdeogramCaption, IdeogramSessionStatus, IdeogramGenerateBody, IdeogramGenerateResult, Concept, ConceptsBackend, ConceptGeneration, ConfCatalog, ConfStatus, ConfOverview, ConfInstRow, ConfInstitution, ConfTopic, ConfPaperDetail } from "../types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -1469,5 +1469,60 @@ export async function repairConceptViz(paperId: string, conceptId: string, error
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ error }),
+  });
+}
+
+// ── Conference explorer ───────────────────────────────────────────────────────
+
+export async function listConferences(): Promise<ConfCatalog> {
+  return apiFetch("/conferences/catalog");
+}
+
+export async function getConferenceStatus(key: string): Promise<ConfStatus> {
+  return apiFetch(`/conferences/${encodeURIComponent(key)}/status`);
+}
+
+export async function buildConference(key: string): Promise<ConfStatus> {
+  return apiFetch(`/conferences/${encodeURIComponent(key)}/build`, { method: "POST" });
+}
+
+export async function getConference(key: string): Promise<ConfOverview> {
+  return apiFetch(`/conferences/${encodeURIComponent(key)}/overview`);
+}
+
+export async function listConferenceInstitutions(
+  key: string,
+  params: { q?: string; sector?: string; area?: number; offset?: number; limit?: number },
+): Promise<{ total: number; offset: number; rows: ConfInstRow[] }> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.sector) qs.set("sector", params.sector);
+  if (params.area != null && params.area >= 0) qs.set("area", String(params.area));
+  qs.set("offset", String(params.offset ?? 0));
+  qs.set("limit", String(params.limit ?? 50));
+  return apiFetch(`/conferences/${encodeURIComponent(key)}/institutions?${qs}`);
+}
+
+export async function getConferenceInstitution(key: string, slug: string): Promise<ConfInstitution> {
+  return apiFetch(`/conferences/${encodeURIComponent(key)}/institutions/${encodeURIComponent(slug)}`);
+}
+
+export async function conferenceTopic(key: string, query: string, k: number): Promise<ConfTopic> {
+  return apiFetch(`/conferences/${encodeURIComponent(key)}/topic`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, k }),
+  });
+}
+
+export async function getConferencePaper(key: string, pid: string): Promise<ConfPaperDetail> {
+  return apiFetch(`/conferences/${encodeURIComponent(key)}/papers/${encodeURIComponent(pid)}`);
+}
+
+export async function addConferencePaper(key: string, pid: string, projectId?: string): Promise<{ paper_id: string; created: boolean }> {
+  return apiFetch(`/conferences/${encodeURIComponent(key)}/papers/${encodeURIComponent(pid)}/add`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ project_id: projectId ?? null }),
   });
 }

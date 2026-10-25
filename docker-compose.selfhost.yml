@@ -29,6 +29,8 @@ services:
       - NEO4J_USER=neo4j
       - FRONTEND_URL=http://localhost:${PM_PORT:-8080}
       - TRUSTED_HOSTS=localhost,127.0.0.1
+      # Conference explorer datasets and the embedding model, on the persistent volume.
+      - CONFERENCE_DATA_DIR=/app/data/conferences
     volumes:
       # PDFs and figure images when STORAGE_BACKEND is local (the default without Drive).
       - paper_files:/app/data

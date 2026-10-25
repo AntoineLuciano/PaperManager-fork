@@ -22,7 +22,7 @@ Or use the project-level .mcp.json at the repo root.
 from mcp.server.fastmcp import FastMCP
 from config import settings
 from services.auth import set_request_user
-from tools import paper_tools, note_tools, tag_tools, person_tools, project_tools, ai_tools, library_tools, upload_tools, maintenance_tools
+from tools import paper_tools, note_tools, tag_tools, person_tools, project_tools, ai_tools, library_tools, upload_tools, maintenance_tools, conference_tools
 
 set_request_user(settings.default_user_name)
 
@@ -37,6 +37,7 @@ ai_tools.register(mcp)
 library_tools.register(mcp)
 upload_tools.register(mcp)
 maintenance_tools.register(mcp)
+conference_tools.register(mcp)
 
 if __name__ == "__main__":
     mcp.run()

@@ -79,6 +79,7 @@ This means every capability is available both via HTTP (for the browser) and via
 | `chapters.py` | `/papers/{id}/chapters` | Book / lecture chapter management |
 | `blogs.py` | `/blogs` | Blog and blog post management |
 | `venues.py` | `/venues` | Venue browser |
+| `conferences.py` | `/conferences` | Conference explorer: institutions and topics per conference-year |
 | `claims.py` | `/papers/{id}/claims` | Claim extraction and search |
 | `synthesis.py` | `/synthesis` | Cross-paper synthesis |
 | `research_gaps.py` | `/research-gaps` | Research gap analysis |
@@ -106,6 +107,7 @@ This means every capability is available both via HTTP (for the browser) and via
 | `embeddings.py` | Generate Ollama embeddings for semantic similarity |
 | `person_enrichment.py` | Enrich Person nodes with affiliation / S2 data |
 | `web_search.py` | Web search helper for research gap and synthesis endpoints |
+| `conferences/` | Conference explorer: catalog, source fetchers, institution normalisation, area taxonomy, bge-small embedder, on-disk store and build worker |
 
 ### db/queries/
 

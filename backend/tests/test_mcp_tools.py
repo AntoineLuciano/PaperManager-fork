@@ -198,5 +198,6 @@ def test_mcp_server_has_all_tools():
         "list_people", "add_person", "link_person_to_paper", "get_person_papers",
         "list_projects", "create_project", "add_to_project", "list_project_papers",
         "chat_with_paper", "get_paper_concepts",
+        "list_conferences", "conference_topic", "conference_institution",
     }
     assert expected.issubset(names), f"Missing tools: {expected - names}"

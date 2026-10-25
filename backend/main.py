@@ -50,6 +50,7 @@ from routers.author_tracker import router as author_tracker_router
 from routers.merge import router as merge_router
 from routers.audit_log import router as audit_log_router
 from routers.ideogram import router as ideogram_router
+from routers.conferences import router as conferences_router
 
 
 @asynccontextmanager
@@ -72,6 +73,12 @@ async def lifespan(app: FastAPI):
     log.info("People tags ready")
     from routers.concept_map import start_auto_mapping
     start_auto_mapping()
+    # Download and index the default conferences in the background (CONFERENCES_AUTO).
+    try:
+        from services.conferences.store import start_auto_build
+        start_auto_build()
+    except Exception as exc:  # noqa: BLE001 — the explorer must never block startup
+        log.warning("Conference auto-build not started: %s", exc)
     yield
     log.info("PaperManager backend shutting down")
 
@@ -216,6 +223,7 @@ app.include_router(author_tracker_router)
 app.include_router(merge_router)
 app.include_router(audit_log_router)
 app.include_router(ideogram_router)
+app.include_router(conferences_router)
 
 
 @app.get("/litellm/models", response_model=list[str])

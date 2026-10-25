@@ -94,6 +94,17 @@ Write tools preview by default: `merge_papers` runs with `dry_run=true`, `delete
 | `regenerate_summary` | Re-run the summary on the stored full text (LiteLLM summary model) |
 | `delete_paper` | `services/paper_delete.py` (shared with `DELETE /papers/{id}`): paper, note, highlights, claims, figures, PDF to Drive trash; preview unless `confirm=true` |
 
+### Conferences (`tools/conference_tools.py`)
+
+Read-only, over the datasets of the conference explorer (`.specs/011_conferences.md`). A
+conference not loaded returns an error naming its state rather than starting a download.
+
+| Tool | Description |
+|---|---|
+| `list_conferences` | Conference-years with state, paper and institution counts (`only_loaded`) |
+| `conference_topic` | `store.topic`: top-k papers closest to a query, counted per institution (academia / industry), area mix, closest papers with `library_paper_id` |
+| `conference_institution` | Best name match, then `store.institution_detail`: rank, papers, fractional, area mix with the conference share, collaborators, authors, papers |
+
 ### People & Projects
 
 | Tool | Description |

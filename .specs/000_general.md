@@ -21,6 +21,7 @@ It is built for a single primary user with optional teammate/multi-user support.
 | Knowledge chat | Graph-aware multi-paper Q&A with `@mention` targeting, vector search, Cypher tool |
 | Single-paper chat | Q&A over a paper's full text; also figure vision chat |
 | Cypher editor | Raw Neo4j query editor with AI assist |
+| Conference explorer | NeurIPS / ICML / ICLR / CVPR / ACL / ... by institution and by topic; data on disk, bge-small embeddings on CPU (`.specs/011_conferences.md`) |
 | MCP server | Claude Desktop integration — search, chat, annotate from Claude |
 | Export | BibTeX, JSON |
 | Auth | JWT-based login, admin-managed users, rate limiting |

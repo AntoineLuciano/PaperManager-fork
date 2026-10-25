@@ -23,7 +23,8 @@ one Neo4j knowledge graph you can search and chat with.
 | **Quick tour** | An overview, what to skip, and 6–12 stops anchored to passages in the PDF. |
 | **Project concept map** | Key concepts and their relations across every paper in a project, as an interactive graph filtered by author, year and kind. |
 | **Knowledge chat** | Ask across the whole library in a desk-style layout: citations open the paper beside the chat, answers get interactive concept cards (formula, plot, animation, short note) and 3D molecules from the PDB or AlphaFold DB ([3Dmol.js](https://3dmol.csb.pitt.edu)). Scope with `@project:`, `@topic:`, `@tag:`, `@paper:`, `@person:`, `@user:`; graph-aware, with optional web search. Claude, Claude Code or any OpenAI-compatible model. |
-| **MCP server** | 35 tools for Claude Desktop and Claude Code: search, read, annotate, upload, merge duplicates. |
+| **Conference explorer** | Browse NeurIPS, ICML, ICLR, CVPR, ICCV, ECCV, ACL, EMNLP, AAAI, CoRL and more by institution (rank, research-area mix, collaborators, papers) or by topic (who publishes most on it, closest papers). Data from the official conference sites and [Paper Copilot](https://github.com/papercopilot/paperlists), embedded on your own server. |
+| **MCP server** | 38 tools for Claude Desktop and Claude Code: search, read, annotate, upload, merge duplicates, query conferences. |
 | **More** | Knowledge graph and Cypher editor, cross-paper synthesis, research-gap finder, author tracking, duplicate merge manager, BibTeX export, multi-user accounts with shared projects. |
 
 <table>
@@ -115,6 +116,7 @@ The full docs are at **[niklasabraham.github.io/PaperManager](https://niklasabra
 | [Concepts, tour and concept map](docs/user-guide/reading-tools.md) | [AI pipelines](docs/technical/ai-pipelines.md) |
 | [Knowledge chat and graph](docs/user-guide/knowledge-features.md) | [Local development](docs/user-guide/getting-started.md) |
 | [MCP server](docs/user-guide/mcp-server.md) | [API reference](docs/technical/api-reference.md) |
+| [Conference explorer](docs/user-guide/conferences.md) | |
 | [Hosting your own](docs/self_hosting.md) | [Decisions log](docs/decisions.md) |
 
 Developer context for working on the code (also used by coding agents) lives in [`.specs/`](.specs/):
@@ -122,7 +124,7 @@ Developer context for working on the code (also used by coding agents) lives in 
 [data model](.specs/002_data_model.md), [ingestion](.specs/003_ingestion.md),
 [AI pipelines](.specs/004_ai_pipelines.md), [knowledge chat](.specs/005_knowledge_chat.md),
 [API](.specs/006_api.md), [deployment](.specs/007_deployment.md),
-[MCP server](.specs/008_mcp_server.md).
+[MCP server](.specs/008_mcp_server.md), [conference explorer](.specs/011_conferences.md).
 
 ---
 

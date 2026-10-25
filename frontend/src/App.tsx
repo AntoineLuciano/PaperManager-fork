@@ -13,6 +13,7 @@ import Blogs from "./pages/Blogs";
 import BlogPostDetail from "./pages/BlogPostDetail";
 import Teammates from "./pages/Teammates"; // page kept for direct navigation; no navbar link
 import Venues from "./pages/Venues";
+import Conferences from "./pages/Conferences";
 import MergeManager from "./pages/MergeManager";
 import Login from "./pages/Login";
 import AdminConsole from "./pages/AdminConsole";
@@ -57,6 +58,7 @@ function NavBar() {
       <NavLink to="/knowledge" className={cls}>Knowledge</NavLink>
       <NavLink to="/tools" className={cls}>Tools</NavLink>
       <NavLink to="/discover" className={cls}>Discover</NavLink>
+      <NavLink to="/conferences" className={cls}>Conferences</NavLink>
       <NavLink to="/literature" className={cls}>Literature</NavLink>
       <NavLink to="/blogs" className={cls}>Blogs</NavLink>
       <NavLink to="/admin" className={cls}>Admin</NavLink>
@@ -127,6 +129,8 @@ function AppLayout() {
                 <Route path="/projects" element={<Projects />} />
                 <Route path="/projects/:id/map" element={<Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading concept map…</div>}><ConceptMap /></Suspense>} />
                 <Route path="/venues" element={<Venues />} />
+                <Route path="/conferences" element={<Conferences />} />
+                <Route path="/conferences/:key" element={<Conferences />} />
                 <Route path="/graph"   element={<Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading graph…</div>}><Graph /></Suspense>} />
                 <Route path="/cypher" element={<Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading…</div>}><Cypher /></Suspense>} />
                 <Route path="/knowledge" element={<Suspense fallback={<div className="p-8 text-sm text-gray-400">Loading…</div>}><KnowledgeChat /></Suspense>} />

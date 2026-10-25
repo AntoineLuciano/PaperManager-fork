@@ -72,6 +72,11 @@ services:
       - RATE_LIMIT_AUTH_PATHS=${RATE_LIMIT_AUTH_PATHS:-/auth/login,/auth/register,/auth/admin/create-user}
       # Host directory the MCP upload_pdf tool may read PDFs from, mounted read-only
       # at the same path so host paths work unchanged inside the container.
+      # Conference explorer (docs/user-guide/conferences.md); data lives on backend_data:/data.
+      - CONFERENCES_AUTO=${CONFERENCES_AUTO:-true}
+      - CONFERENCES_DEFAULT=${CONFERENCES_DEFAULT:-}
+      - CONFERENCES_REFRESH_DAYS=${CONFERENCES_REFRESH_DAYS:-14}
+      - CONFERENCE_EMBED_THREADS=${CONFERENCE_EMBED_THREADS:-4}
       - HOST_IMPORT_ROOT=${HOST_IMPORT_ROOT:-/srv/papers}
     depends_on:
       - neo4j

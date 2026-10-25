@@ -513,3 +513,152 @@ export interface ConceptGeneration {
   failed: number;
   running: boolean;
 }
+
+// ── Conference explorer ───────────────────────────────────────────────────────
+
+export type ConfState = "none" | "queued" | "fetching" | "normalising" | "embedding" | "ready" | "partial" | "unavailable" | "error";
+export type Sector = "A" | "I";
+
+export interface ConfArea {
+  index: number;
+  name: string;
+  short: string;
+  color: string;
+  count: number;
+}
+
+export interface ConfEdition {
+  key: string;
+  name: string;
+  series: string;
+  slug: string;
+  field: string;
+  year: number;
+  source: "miniconf" | "papercopilot";
+  state: ConfState;
+  progress?: number | null;
+  message: string;
+  papers?: number | null;
+  institutions?: number | null;
+  partial?: boolean;
+  expected?: number | null;
+}
+
+export interface ConfCatalog {
+  conferences: ConfEdition[];
+  areas: { name: string; short: string; color: string }[];
+  defaults: string[];
+}
+
+export interface ConfStatus {
+  key: string;
+  name: string;
+  state: ConfState;
+  progress?: number;
+  message?: string;
+  papers?: number;
+}
+
+export interface ConfInstBrief {
+  name: string;
+  slug: string;
+  sector: Sector;
+  papers: number;
+  rank: number;
+}
+
+export interface ConfOverview {
+  key: string;
+  name: string;
+  series: string;
+  year: number;
+  field: string;
+  source: string;
+  source_url: string;
+  fetched_at: string;
+  partial: boolean;
+  expected: number | null;
+  papers: number;
+  institutions: number;
+  with_institution: number;
+  with_industry: number;
+  areas_ready: boolean;
+  decisions: { label: string; count: number }[];
+  areas: ConfArea[];
+  top_academia: ConfInstBrief[];
+  top_industry: ConfInstBrief[];
+  status: ConfStatus;
+}
+
+export interface ConfInstRow {
+  name: string;
+  slug: string;
+  sector: Sector;
+  rank: number;
+  area_rank: number | null;
+  papers: number;
+  fractional: number;
+  count: number;
+  share: number;
+  of_own: number | null;
+  areas: number[];
+}
+
+export interface ConfPaper {
+  id: string;
+  title: string;
+  area: number;
+  decision: string;
+  track: string;
+  session: string;
+  url: string;
+  forum: string;
+  institutions: { name: string; slug: string; sector: Sector }[];
+  more_institutions: number;
+  authors: number;
+  match?: number;
+  library_id?: string | null;
+}
+
+export interface ConfPaperDetail extends ConfPaper {
+  abstract: string;
+  native_topic: string;
+  keywords: string[];
+  author_list: { name: string; institutions: string[] }[];
+  conference: string;
+  year: number;
+  similar?: ConfPaper[];
+}
+
+export interface ConfInstitution {
+  name: string;
+  slug: string;
+  sector: Sector;
+  rank: number;
+  sector_rank: number | null;
+  papers: number;
+  fractional: number;
+  share: number;
+  areas: ConfArea[];
+  conference_areas: ConfArea[];
+  collaborators: (ConfInstBrief & { shared: number })[];
+  authors: { name: string; papers: number }[];
+  paper_list: ConfPaper[];
+}
+
+export interface ConfTopicInst extends ConfInstBrief {
+  count: number;
+  of_own: number;
+}
+
+export interface ConfTopic {
+  query: string;
+  mode: "semantic" | "keyword";
+  k: number;
+  total: number;
+  with_industry: number;
+  areas: ConfArea[];
+  academia: ConfTopicInst[];
+  industry: ConfTopicInst[];
+  papers: ConfPaper[];
+}

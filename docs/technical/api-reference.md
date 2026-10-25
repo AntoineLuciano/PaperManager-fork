@@ -310,6 +310,24 @@ SSE event types: `progress`, `token`, `done`, `error`.
 
 ---
 
+## Conferences (conference explorer)
+
+`{key}` is a conference-year (`neurips2026`) or a name (`ICML 2025`, `iclr` = latest).
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/conferences/catalog` | Every known conference-year with its build state, the area taxonomy, the default set |
+| `GET` | `/conferences/{key}/status` | Build state: `none`, `queued`, `fetching`, `normalising`, `embedding`, `ready`, `partial`, `unavailable`, `error` (+ `progress`) |
+| `POST` | `/conferences/{key}/build` | Queue a download + index (also refreshes a loaded one) |
+| `GET` | `/conferences/{key}/overview` | Counts, area mix, top universities and companies (409 while not loaded) |
+| `GET` | `/conferences/{key}/institutions` | Ranked institutions (`?q=&sector=A\|I&area=&offset=&limit=`) |
+| `GET` | `/conferences/{key}/institutions/{slug}` | One institution: rank, counts, area mix, collaborators, authors, papers |
+| `POST` | `/conferences/{key}/topic` | `{query, k}`: the k closest papers, counted per institution, area mix, top papers |
+| `GET` | `/conferences/{key}/papers/{pid}` | Abstract, authors with institutions, closest papers |
+| `POST` | `/conferences/{key}/papers/{pid}/add` | Add to the library (`{project_id?}`); returns the existing paper on a title match |
+
+---
+
 ## Merge (duplicate detection)
 
 | Method | Path | Description |

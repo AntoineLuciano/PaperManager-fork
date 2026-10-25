@@ -75,6 +75,8 @@ React Router v7 defines the page routes in `App.tsx`:
 | `/people` | `People` | People list and detail |
 | `/projects` | `Projects` | Project list and detail |
 | `/venues` | `Venues` | Venue browser |
+| `/conferences` | `Conferences` | Conference explorer: every conference-year |
+| `/conferences/:key` | `Conferences` | One conference: overview, institutions (`?view=institutions&inst=`), topics (`?view=topics&q=`) |
 | `/graph` | `Graph` | Knowledge graph visualisation |
 | `/knowledge` | `KnowledgeChat` | Multi-paper AI chat |
 | `/cypher` | `Cypher` | Cypher query editor |
@@ -118,6 +120,15 @@ Streams recent papers from arXiv, PubMed, and bioRxiv using keyword lists. Paper
 ### Discover (`Discover.tsx`)
 
 Unified external search across arXiv, Semantic Scholar, and PubMed. Shows which results are already in the library; adds missing ones via URL ingest.
+
+### Conferences (`Conferences.tsx`)
+
+Conference explorer. The landing page lists every conference-year by field with its build
+state (polling while one builds); a conference page has three views kept in the URL:
+overview, a ranked institution table with an institution card (`InstitutionsView`,
+`InstitutionCard`), and topic search (`TopicView`). `AreaBar` draws an area mix, optionally
+against the conference's; `PaperRow` expands to the abstract and closest papers and adds a
+paper to the library. Components live in `components/conferences/`.
 
 ### Blogs (`Blogs.tsx`) and BlogPostDetail (`BlogPostDetail.tsx`)
 

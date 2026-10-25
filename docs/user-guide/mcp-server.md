@@ -65,6 +65,9 @@ Ask Claude: *"Can you list my recent papers?"* — Claude should call `search_pa
 | `update_paper_metadata` | Correct title, year, venue, DOI, abstract or the author list |
 | `regenerate_summary` | Re-run the AI summary from the stored full text |
 | `delete_paper` | Delete a paper with its note, highlights and PDF (needs `confirm=true`) |
+| `list_conferences` | Conference-years the [conference explorer](conferences.md) has loaded |
+| `conference_topic` | Who publishes on a topic at a conference: top universities and companies, area mix, closest papers |
+| `conference_institution` | One institution at a conference: rank, counts, area mix, collaborators, papers |
 
 ---
 
