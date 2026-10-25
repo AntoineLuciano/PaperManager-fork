@@ -33,6 +33,12 @@ from services.conferences import areas, catalog, institutions, sources, store
     ("McGill University / Mila / DeepMind Montreal", [("McGill University", "A"), ("Mila", "A"), ("Google", "I")]),
     ("Tel Aviv University and Facebook AI Research", [("Tel Aviv University", "A"), ("Meta", "I")]),
     ("Texas A&amp;M University", [("Texas A&M University", "A")]),
+    ("University of Science and Technology of China", [("USTC", "A")]),
+    ("Norwegian University of Science and Technology", [("Norwegian University of Science and Technology", "A")]),
+    ("University of Science and Technology Beijing", [("University of Science and Technology Beijing", "A")]),
+    ("Robotics and AI Institute", [("Robotics and AI Institute", "A")]),
+    ("Shandong Medical and Pharmaceutical University", [("Shandong Medical and Pharmaceutical University", "A")]),
+    ("Liquid AI & MIT", [("Liquid AI", "I"), ("MIT", "A")]),
     ("Department of Physics and Astronomy, University College London", [("University College London", "A")]),
 ])
 def test_split_and_normalise(raw, expected):

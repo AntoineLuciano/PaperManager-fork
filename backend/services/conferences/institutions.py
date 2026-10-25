@@ -345,9 +345,25 @@ def _segments(part: str) -> list[str]:
     return out
 
 
+# "University of Science and Technology of China": the piece after "and" continues a
+# name rather than starting a new organisation.
+_SUBJECT = re.compile(r"^(technolog|engineering|science|arts|medicine|design|applied|management|economics|"
+                      r"mathematics|physics|computer|computing|information|astronomy|research|innovation|"
+                      r"telecommunication|health|business|law|education|electronics|automation)")
+
+
+_HEAD = re.compile(r"universi|institut|\bcollege\b|\blabs?\b|laborator|\binc\b|\bltd\b|\bcorp|\bresearch\b|"
+                   r"\bcent(er|re)\b|\bhospital|\bgroup\b|\bacadem|\bschool\b|\bai\b|\.ai\b|ecole|polytechn|"
+                   r"\bfoundation\b|\bcompany\b|\btechnologies\b")
+
+
 def _is_org(part: str) -> bool:
+    """A complete organisation name on its own: an alias, or at least two words with a head
+    noun ("Liquid AI", "Tel Aviv University"), not "Robotics" or "Shandong Medical"."""
     f = fold(part)
-    return bool(alias(part) or _ACADEMIC.search(f) or _COMPANY.search(f)) and not _DEPT.match(f)
+    if _DEPT.match(f):
+        return False
+    return bool(alias(part)) or (len(f.split()) >= 2 and bool(_HEAD.search(f)))
 
 
 def _parts(s: str) -> list[str]:
@@ -365,7 +381,9 @@ def _parts(s: str) -> list[str]:
     final: list[str] = []
     for part in out:
         bits = re.split(r"\s+(?:&|and)\s+", part)
-        if len(bits) > 1 and "," not in part and all(_is_org(b) for b in bits):
+        if (len(bits) > 1 and "," not in part
+                and all(_is_org(b) for b in bits)
+                and not any(_SUBJECT.match(fold(b)) for b in bits[1:])):
             final.extend(bits)
         else:
             final.append(part)
