@@ -380,3 +380,11 @@ async def test_search_endpoints(three_confs, monkeypatch):
         t = await client.post("/conferences/search/topic", json={"query": "protein", "k": 10})
         assert t.status_code == 200 and t.json()["k"] == 10
         assert (await client.post("/conferences/search/topic", json={"query": "  "})).status_code == 422
+
+
+@pytest.mark.parametrize("raw, name", [
+    ("ENS", "ENS Paris"), ("Ecole Normale Supérieure de Paris", "ENS Paris"), ("ENS Lyon", "ENS Lyon"),
+    ("U. Montreal", "Université de Montréal"), ("Technical University Munich", "TU Munich"),
+])
+def test_more_aliases(raw, name):
+    assert institutions.split_and_normalise(raw) == [(name, "A")]
