@@ -662,3 +662,80 @@ export interface ConfTopic {
   industry: ConfTopicInst[];
   papers: ConfPaper[];
 }
+
+// Search across all loaded conferences (/conferences/search/*)
+
+export interface ConfSearchConf {
+  key: string;
+  name: string;
+  series: string;
+  slug: string;
+  field: string;
+  year: number;
+  papers: number;
+}
+
+export interface ConfSearchPaper extends ConfPaper {
+  conf_key: string;
+  conf_name: string;
+  conf_year: number;
+  title_match?: "exact" | "prefix" | "phrase" | "words" | "most words";
+  author_institutions?: string[];
+  author_position?: number;
+}
+
+export interface ConfAuthor {
+  name: string;
+  folded: string;
+  score: number;
+  papers: number;
+  conference_count: number;
+  coauthors: number;
+  institutions: { name: string; sector: Sector; papers: number }[];
+  /** Filled only when the papers fall into groups sharing no institution and no co-author. */
+  identities: { papers: number; institutions: string[]; conferences: string[] }[];
+  conferences: (ConfSearchConf & { papers_by_author: ConfSearchPaper[] })[];
+  more_papers: number;
+}
+
+export interface ConfSearch {
+  query: string;
+  kind: "all" | "paper" | "author";
+  suggested: "paper" | "author" | "topic";
+  conferences: ConfSearchConf[];
+  ms: number;
+  papers?: {
+    query: string;
+    title: ConfSearchPaper[];
+    title_total: number;
+    semantic: ConfSearchPaper[];
+    semantic_ready: boolean;
+    conferences: ConfSearchConf[];
+  };
+  authors?: { query: string; total: number; authors: ConfAuthor[] };
+}
+
+export interface ConfSearchTopicInst {
+  name: string;
+  sector: Sector;
+  count: number;
+  papers: number;
+  of_own: number;
+  conferences: { key: string; count: number; slug: string }[];
+}
+
+export interface ConfSearchTopic {
+  query: string;
+  k: number;
+  threshold: number | null;
+  total: number;
+  conferences: (ConfSearchConf & { count: number; per_1k: number; best: number | null; top: ConfSearchPaper[] })[];
+  skipped: (ConfSearchConf & { reason: string })[];
+  trend: { series: string; slug: string; points: { year: number; key: string; count: number; per_1k: number; papers: number }[] }[];
+  areas: ConfArea[];
+  with_industry: number;
+  with_institution: number;
+  academia: ConfSearchTopicInst[];
+  industry: ConfSearchTopicInst[];
+  papers: ConfSearchPaper[];
+}

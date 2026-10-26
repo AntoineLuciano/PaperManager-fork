@@ -1,4 +1,5 @@
 import type { T_IngestOut, ParsedMeta, GraphData, Reference, Conversation, KnowledgeMessage, SseEvent, BulkSseEvent, Figure, PaperTable, LiteratureSseEvent, Paper, Chapter, Blog, BlogPost, Note, Annotation, AnnotationColor, VenueOut, Claim , IdeogramCaption, IdeogramSessionStatus, IdeogramGenerateBody, IdeogramGenerateResult, Concept, ConceptsBackend, ConceptGeneration, ConfCatalog, ConfStatus, ConfOverview, ConfInstRow, ConfInstitution, ConfTopic, ConfPaperDetail } from "../types";
+import type { ConfSearch, ConfSearchTopic } from "../types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -1524,5 +1525,42 @@ export async function addConferencePaper(key: string, pid: string, projectId?: s
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ project_id: projectId ?? null }),
+  });
+}
+
+export interface ConfSearchFilters {
+  series?: string;
+  field?: string;
+  year_min?: number | null;
+  year_max?: number | null;
+}
+
+/** Papers and authors across every loaded conference. */
+export async function searchConferences(
+  q: string,
+  params: ConfSearchFilters & { kind?: "all" | "paper" | "author"; limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<ConfSearch> {
+  const qs = new URLSearchParams({ q, kind: params.kind ?? "all" });
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.series) qs.set("series", params.series);
+  if (params.field) qs.set("field", params.field);
+  if (params.year_min) qs.set("year_min", String(params.year_min));
+  if (params.year_max) qs.set("year_max", String(params.year_max));
+  return apiFetch(`/conferences/search/query?${qs}`, { signal });
+}
+
+/** A topic over every loaded conference: pooled closest papers, per conference, per year. */
+export async function searchConferencesTopic(
+  query: string,
+  params: ConfSearchFilters & { k?: number } = {},
+  signal?: AbortSignal,
+): Promise<ConfSearchTopic> {
+  return apiFetch("/conferences/search/topic", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, k: params.k ?? 300, series: params.series ?? "", field: params.field ?? "",
+      year_min: params.year_min ?? null, year_max: params.year_max ?? null }),
+    signal,
   });
 }

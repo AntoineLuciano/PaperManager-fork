@@ -9,7 +9,9 @@ A build runs in one background worker thread, one conference at a time:
 After ``normalising`` the dataset is already on disk and the institution views work;
 areas and semantic topic search follow once ``embedding`` is done. Files live in
 ``<data dir>/<key>/``: ``dataset.json`` (papers, institutions, areas), ``emb.npy``
-(float16 unit vectors, one row per paper) and ``status.json``.
+(float16 unit vectors of title + abstract, one row per paper), ``emb_title.npy`` (the
+same for the title alone, written only when some papers have an abstract or keywords;
+cross-conference search compares conferences on these) and ``status.json``.
 
 The data directory is ``CONFERENCE_DATA_DIR``, else ``/data/conferences`` (the backend's
 Docker volume), else a temp directory.
@@ -119,6 +121,14 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", institutions.fold(name)).strip("-") or "x"
 
 
+def needs_title_embedding(papers: list[dict]) -> bool:
+    """Whether ``emb.npy`` holds more than titles. Cross-conference search ranks every
+    conference by title-only vectors: title + abstract vectors sit 0.03-0.07 higher in
+    cosine to any query than title-only ones, so a conference with abstracts would
+    otherwise win every comparison against one without."""
+    return any(p.get("a") or p.get("kw") for p in papers)
+
+
 def _embed_text(p: dict) -> str:
     parts = [p["t"]]
     if p.get("a"):
@@ -201,6 +211,7 @@ def build(key: str) -> None:
     _finalise(dataset)
     _dir(key).mkdir(parents=True, exist_ok=True)
     (_dir(key) / "emb.npy").unlink(missing_ok=True)
+    (_dir(key) / "emb_title.npy").unlink(missing_ok=True)
     _write_json(_dir(key) / "dataset.json", dataset)
     _cache_drop(key)
 
@@ -215,6 +226,11 @@ def build(key: str) -> None:
     try:
         emb = embedder.embed([_embed_text(p) for p in papers], progress=prog)
         protos = area_mod.prototypes(lambda xs: embedder.embed(xs, max_length=64))
+        temb = None
+        if needs_title_embedding(papers):
+            _set_status(key, "embedding", progress=1.0, message=f"Embedding {len(papers)} titles",
+                        papers=len(papers))
+            temb = embedder.embed([p["t"] for p in papers], max_length=64)
     except Exception as exc:  # noqa: BLE001
         log.exception("conference %s: embedding failed", key)
         _set_status(key, "partial", message=f"Institutions ready; topic search unavailable ({exc})",
@@ -226,6 +242,10 @@ def build(key: str) -> None:
     dataset["areas_ready"] = True
     _finalise(dataset)
     np.save(_dir(key) / "emb.npy", emb.astype(np.float16))
+    if temb is not None:
+        np.save(_dir(key) / "emb_title.npy", temb.astype(np.float16))
+    else:
+        (_dir(key) / "emb_title.npy").unlink(missing_ok=True)
     _write_json(_dir(key) / "dataset.json", dataset)
     _cache_drop(key)
     _set_status(key, "ready", progress=1.0, papers=len(papers), institutions=len(inst_rows),
@@ -269,7 +289,30 @@ def _finalise(ds: dict) -> None:
             row["slug"] = f"{row['slug']}-{seen[row['slug']]}"
 
 
+def build_title_embeddings(key: str) -> bool:
+    """Add ``emb_title.npy`` to a dataset built before it existed. No status change: the
+    conference stays usable throughout. Returns whether a file was written."""
+    path = _dir(key) / "emb_title.npy"
+    if path.exists() or not (_dir(key) / "emb.npy").exists():
+        return False
+    ds = load(key)
+    if ds is None or not needs_title_embedding(ds.papers):
+        return False
+    from services.conferences import embedder
+
+    t0 = time.time()
+    temb = embedder.embed([p["t"] for p in ds.papers], max_length=64)
+    tmp = path.with_name("emb_title.tmp.npy")
+    np.save(tmp, temb.astype(np.float16))
+    tmp.replace(path)
+    _cache_drop(key)
+    log.info("conference %s: title embeddings for %d papers, %.0fs", key, len(ds.papers), time.time() - t0)
+    return True
+
+
 # ── worker ────────────────────────────────────────────────────────────────────
+
+_TITLES = "titles:"
 
 _queue: "queue.Queue[str]" = queue.Queue()
 _queued: set[str] = set()
@@ -281,10 +324,16 @@ def _work() -> None:
     while True:
         key = _queue.get()
         try:
-            build(key)
+            if key.startswith(_TITLES):
+                build_title_embeddings(key[len(_TITLES):])
+            else:
+                build(key)
         except Exception as exc:  # noqa: BLE001
-            log.exception("conference %s: build failed", key)
-            _set_status(key, "error", message=str(exc))
+            if key.startswith(_TITLES):
+                log.exception("conference %s: title embeddings failed", key[len(_TITLES):])
+            else:
+                log.exception("conference %s: build failed", key)
+                _set_status(key, "error", message=str(exc))
         finally:
             with _worker_lock:
                 _queued.discard(key)
@@ -306,6 +355,27 @@ def request_build(key: str) -> dict:
             _worker = threading.Thread(target=_work, name="conference-builder", daemon=True)
             _worker.start()
     return status(key)
+
+
+def request_title_embeddings(key: str) -> None:
+    """Queue ``build_title_embeddings`` behind any running build."""
+    global _worker
+    item = _TITLES + key
+    with _worker_lock:
+        if item in _queued:
+            return
+        _queued.add(item)
+        _queue.put(item)
+        if _worker is None or not _worker.is_alive():
+            _worker = threading.Thread(target=_work, name="conference-builder", daemon=True)
+            _worker.start()
+
+
+def loaded_keys() -> list[str]:
+    """Keys of every conference-year with a dataset on disk, in catalog order (series,
+    newest year first). A conference being refreshed keeps its previous files until the
+    new ones replace them, so it stays searchable."""
+    return [e.key for e in catalog.editions() if (_dir(e.key) / "dataset.json").exists()]
 
 
 _DEFAULTS = "neurips2026,icml2026,iclr2026,cvpr2026,iccv2025,eccv2026,neurips2025,acl2025"
@@ -343,17 +413,30 @@ def start_auto_build() -> None:
         log.info("Conference auto-build queued: %s", ", ".join(todo))
     for key in todo:
         request_build(key)
+    # Datasets built before title-only vectors existed get them (cross-conference search).
+    for key in loaded_keys():
+        if key not in todo and (_dir(key) / "emb.npy").exists() and not (_dir(key) / "emb_title.npy").exists():
+            request_title_embeddings(key)
+    # Load every dataset, the search index and the model once, so the first search is fast.
+    from services.conferences import search as search_mod
+
+    threading.Thread(target=search_mod.warm, name="conference-search-warm", daemon=True).start()
 
 
 # ── loaded datasets ───────────────────────────────────────────────────────────
 
 class Dataset:
-    def __init__(self, raw: dict, emb: np.ndarray | None):
+    def __init__(self, raw: dict, emb: np.ndarray | None, temb: np.ndarray | None = None):
         self.raw = raw
         self.key = raw["key"]
         self.papers: list[dict] = raw["papers"]
         self.insts: list[dict] = raw["insts"]
         self.emb = emb
+        # Title-only vectors for cross-conference comparison: emb itself when it holds
+        # nothing but titles, else emb_title.npy (None until that is built).
+        if temb is None and emb is not None and not needs_title_embedding(self.papers):
+            temb = emb
+        self.temb = temb
         self.by_slug = {r["slug"]: i for i, r in enumerate(self.insts)}
         self.by_pid = {p["id"]: j for j, p in enumerate(self.papers)}
         self.folded = [institutions.fold(r["n"]) for r in self.insts]
@@ -368,9 +451,11 @@ class Dataset:
         return bool(self.raw.get("areas_ready")) and self.emb is not None
 
 
-_cache: "OrderedDict[str, tuple[float, Dataset]]" = OrderedDict()
+_cache: "OrderedDict[str, tuple[tuple[float, float], Dataset]]" = OrderedDict()
 _cache_lock = threading.Lock()
-_CACHE_MAX = int(os.environ.get("CONFERENCE_CACHE_MAX", "8"))
+# Cross-conference search holds every loaded conference at once (20-40 MB each in memory,
+# embeddings included), so the cache must not be smaller than the loaded set.
+_CACHE_MAX = int(os.environ.get("CONFERENCE_CACHE_MAX", "32"))
 
 
 def _cache_drop(key: str) -> None:
@@ -382,7 +467,8 @@ def load(key: str) -> Dataset | None:
     path = _dir(key) / "dataset.json"
     if not path.exists():
         return None
-    mtime = path.stat().st_mtime
+    tpath = _dir(key) / "emb_title.npy"
+    mtime = (path.stat().st_mtime, tpath.stat().st_mtime if tpath.exists() else 0.0)
     with _cache_lock:
         hit = _cache.get(key)
         if hit and hit[0] == mtime:
@@ -395,7 +481,15 @@ def load(key: str) -> Dataset | None:
         emb = np.load(emb_path).astype(np.float32)
         if len(emb) != len(raw["papers"]):
             emb = None
-    ds = Dataset(raw, emb)
+    temb = None
+    if emb is not None and tpath.exists():
+        try:
+            temb = np.load(tpath).astype(np.float32)
+        except (OSError, ValueError):
+            temb = None
+        if temb is not None and len(temb) != len(raw["papers"]):
+            temb = None
+    ds = Dataset(raw, emb, temb)
     with _cache_lock:
         _cache[key] = (mtime, ds)
         _cache.move_to_end(key)

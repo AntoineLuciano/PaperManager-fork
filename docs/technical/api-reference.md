@@ -317,6 +317,8 @@ SSE event types: `progress`, `token`, `done`, `error`.
 | Method | Path | Description |
 | ------ | ---- | ----------- |
 | `GET` | `/conferences/catalog` | Every known conference-year with its build state, the area taxonomy, the default set |
+| `GET` | `/conferences/search/query` | Across all loaded conferences (`?q=&kind=all\|paper\|author&series=&field=&year_min=&year_max=&limit=`): `papers` (`title` matches with `title_match`, `semantic` by meaning, `title_total`), `authors` (cards with papers per conference, institutions, `identities`), `suggested` tab, `ms` |
+| `POST` | `/conferences/search/topic` | `{query, k=300, series?, field?, year_min?, year_max?, papers?}`: the k closest papers pooled over all loaded conferences (title vectors); `conferences` with `count` and `per_1k`, `trend` per series, pooled `academia` / `industry`, `areas`, `papers`, `threshold`, `skipped` |
 | `GET` | `/conferences/{key}/status` | Build state: `none`, `queued`, `fetching`, `normalising`, `embedding`, `ready`, `partial`, `unavailable`, `error` (+ `progress`) |
 | `POST` | `/conferences/{key}/build` | Queue a download + index (also refreshes a loaded one) |
 | `GET` | `/conferences/{key}/overview` | Counts, area mix, top universities and companies (409 while not loaded) |

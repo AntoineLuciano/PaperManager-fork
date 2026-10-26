@@ -5,7 +5,8 @@ conferences two ways: by **institution** (where does a university, lab or compan
 does it publish on, with whom) and by **topic** (type a topic or paste an abstract: which
 universities and companies publish most on it, and which papers are closest). It works for
 every conference-year in the list below, not one fixed conference, and runs entirely on your
-own server.
+own server. A search box on the landing page searches [all loaded conferences at
+once](#searching-all-conferences): papers, authors and where a topic is published.
 
 ![NeurIPS 2026 in the conference explorer](../img/screenshots/conferences.webp)
 
@@ -52,7 +53,9 @@ indexes it in the background; the page shows the progress and fills in as it goe
    [bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) on the CPU, which gives the
    research areas and semantic topic search. About two minutes for NeurIPS 2026 (6,500 papers,
    titles only so far); with abstracts 7–15 minutes (ACL 2025, 3,100 papers: 7 min; NeurIPS
-   2025, 5,900 papers: 14 min) on four CPU threads.
+   2025, 5,900 papers: 14 min) on four CPU threads. A conference with abstracts or keywords
+   also gets its titles embedded on their own (20–45 s), which the
+   [cross-conference search](#searching-all-conferences) compares conferences on.
 
 A default set is loaded when the backend starts (see [Settings](#settings)), so the main
 conferences are ready without anyone waiting. **refresh** at the bottom of a conference page
@@ -112,6 +115,75 @@ conference; ↗ opens the paper on the conference site.
 
 ---
 
+## Searching all conferences
+
+The search box at the top of the Conferences page searches every loaded conference at once.
+Type a title, an author or a topic, or paste an abstract; results update 300 ms after you stop
+typing. Three tabs show three readings of the same query; the page opens the one that fits
+(an author's name that matches no title opens **Authors**, a text of more than twelve words
+opens **Topics**, anything else **Papers**). Filters narrow the search to a field (ML, Vision,
+NLP, ...), a series (NeurIPS) or a range of years. Query, tab and filters are kept in the URL
+(`/conferences?q=Charlotte%20Deane&kind=author`), so a search can be shared or bookmarked.
+
+### Papers
+
+- **Title matches**: titles containing the query's words, best first: the whole title, then
+  titles starting with the query, then the query as a phrase, then all its words in any order,
+  then (for queries of three words or more) all but one. A word also matches its plural, the
+  last word matches as a prefix while you type it ("video gen"), and a word of five letters or
+  more matches with one typo ("difusion"). Ties are broken by closeness in meaning.
+- **Closest by meaning**: the papers whose titles are nearest to the query in embedding space
+  and that did not already match by words. A typo is corrected before embedding.
+
+Each paper carries a chip with its conference; it expands, links and goes into your library as
+anywhere else in the explorer.
+
+### Authors
+
+Names are matched with case and accents folded, by full name, surname, "Surname, First",
+initials (`c deane`), the start of a name or with one typo. Each author card shows the number
+of papers, conferences and distinct co-authors, the institutions given on those papers, and
+the papers grouped by conference, newest first, each with the author's position and their
+institution on that paper.
+
+A name is not a person: two researchers can share one. When an author's papers fall into
+groups that share neither an institution nor a co-author, the card says so and lists the
+groups ("may belong to 2 people: Tsinghua University · Stanford University").
+
+### Topics
+
+Type a topic or paste an abstract to see where it is published:
+
+- **Per conference**: how many of the closest papers each conference holds, per 1,000 of its
+  papers, so a conference of 2,700 papers compares with one of 6,600.
+- **Over the years**: the same rate for every series loaded for more than one year
+  (NeurIPS 2025 → 2026), with the change.
+- **Universities & institutes** and **companies** counted over all conferences together
+  (hover for the count per conference), and the research-area mix of those papers.
+- **Closest papers** over all conferences.
+
+"Closest" means the 100 / 300 / 1,000 papers nearest to the query among all papers of all
+selected conferences together. The similarity of the last of them is one threshold for every
+conference, shown under the heading.
+
+Conferences are compared on **title** embeddings only. A title-plus-abstract embedding sits
+0.03–0.07 higher in cosine similarity to any query than a title-only one, so NeurIPS 2025 (with
+abstracts) would otherwise hold five times as many "diffusion models for protein structure"
+papers per 1,000 as NeurIPS 2026 (titles only so far) when the papers' titles say they are
+about equally common. For this reason the numbers differ from a single conference's
+**Topics & papers** view, which uses titles and abstracts.
+
+Example, all nine default conferences, closest 300: "diffusion models for protein structure"
+is densest at ICLR 2026 (12.1 per 1,000) and NeurIPS 2025 (12.0), then ICML 2026 (8.7) and
+NeurIPS 2026 (7.4); MIT and Google lead with 19 papers each. "video generation" is densest at
+ECCV 2026, CVPR 2026 and ICCV 2025 (14–17 per 1,000, against 4–7 at the ML venues), with
+ByteDance (33) and Alibaba (26) the top companies.
+
+**Search all conferences →** next to a single conference's topic result runs the same query
+here.
+
+---
+
 ## How things are counted
 
 - **Papers**: a paper counts once for every institution with at least one author on it. A paper
@@ -143,16 +215,19 @@ A wrong institution mapping is fixed by an alias line in
 
 ## From Claude (MCP)
 
-Three [MCP tools](mcp-server.md) expose the same data to Claude Desktop and Claude Code:
+Five [MCP tools](mcp-server.md) expose the same data to Claude Desktop and Claude Code:
 
 | Tool | Answers |
 |---|---|
 | `list_conferences` | Which conference-years are loaded, with paper and institution counts |
-| `conference_topic` | Who publishes on a topic at a conference: top universities and companies, area mix, closest papers |
+| `conference_topic` | Who publishes on a topic at a conference: top universities and companies, area mix, closest papers. With `conference="all"`: the same over every loaded conference, plus papers per 1,000 per conference and the trend over years |
 | `conference_institution` | What one institution published at a conference: rank, counts, area mix against the conference, collaborators, authors, papers |
+| `conference_search_papers` | Papers across all loaded conferences by title words (typos tolerated), then by meaning |
+| `conference_search_author` | An author across all loaded conferences: papers per conference with their institution on each, co-author count, and whether the name looks like more than one person |
 
-`conference` takes a key (`neurips2026`), a name (`ICML 2025`) or a bare series (`iclr` = its
-latest year). Papers already in your library come back with their `library_paper_id`.
+`conference` takes a key (`neurips2026`), a name (`ICML 2025`), a bare series (`iclr` = its
+latest year) or, for `conference_topic`, `all`. Papers already in your library come back with
+their `library_paper_id`.
 
 ---
 
@@ -167,6 +242,7 @@ All optional; set them in `.env` and pass them to the backend in `docker-compose
 | `CONFERENCES_REFRESH_DAYS` | `14` | Reload this year's default conferences when older than this |
 | `CONFERENCE_DATA_DIR` | `/data/conferences` | Where datasets and the model live (the backend's volume) |
 | `CONFERENCE_EMBED_THREADS` | `4` | CPU threads for embedding |
+| `CONFERENCE_CACHE_MAX` | `32` | Conferences held in memory at once (20–40 MB each); searching all conferences needs every loaded one in memory |
 
 Each conference takes 5–30 MB on disk (papers, institutions, float16 embeddings); the model
 takes 130 MB once. No API key is involved and nothing is sent anywhere except the download

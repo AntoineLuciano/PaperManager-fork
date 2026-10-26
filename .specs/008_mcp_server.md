@@ -102,8 +102,12 @@ conference not loaded returns an error naming its state rather than starting a d
 | Tool | Description |
 |---|---|
 | `list_conferences` | Conference-years with state, paper and institution counts (`only_loaded`) |
-| `conference_topic` | `store.topic`: top-k papers closest to a query, counted per institution (academia / industry), area mix, closest papers with `library_paper_id` |
+| `conference_topic` | `store.topic`: top-k papers closest to a query, counted per institution (academia / industry), area mix, closest papers with `library_paper_id`. `conference="all"`: `search.topic` over every loaded conference (k defaults to 300): per-conference count and rate per 1,000, trend per series, pooled institutions with per-conference counts |
 | `conference_institution` | Best name match, then `store.institution_detail`: rank, papers, fractional, area mix with the conference share, collaborators, authors, papers |
+| `conference_search_papers` | `search.search_papers`: title matches (`title_match`: exact, prefix, phrase, words, most words) then closest by meaning, each with conference; `series`, `year_min`, `year_max` filters |
+| `conference_search_author` | `search.search_authors`: name matches with papers (capped by `papers`), per-conference counts, institutions, co-author count, `possible_identities` when the papers split into groups sharing no institution or co-author |
+
+`library_paper_id` comes from `routers.conferences.library_titles()` for the MCP default user.
 
 ### People & Projects
 

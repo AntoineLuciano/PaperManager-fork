@@ -87,6 +87,52 @@ def list_conferences():
             "defaults": store.default_keys()}
 
 
+# Cross-conference search. Declared before the /{key}/... routes: POST /search/topic
+# would otherwise be read as the topic of a conference called "search".
+@router.get("/search/query")
+def search_all_conferences(
+    q: str = Query(..., min_length=1, max_length=500),
+    kind: str = Query("all", pattern="^(all|paper|author)$"),
+    series: str = "",
+    field: str = "",
+    year_min: int | None = None,
+    year_max: int | None = None,
+    limit: int = Query(20, ge=1, le=100),
+):
+    """Papers (title words, then meaning) and authors (name) across every loaded
+    conference. ``series`` / ``field`` take comma lists ("neurips,icml", "Vision")."""
+    from services.conferences import search
+
+    return search.search(q, kind=kind, limit=limit, series=series, field=field, year_min=year_min,
+                         year_max=year_max, library=library_titles())
+
+
+class SearchTopicBody(BaseModel):
+    query: str
+    k: int = 300
+    series: str = ""
+    field: str = ""
+    year_min: int | None = None
+    year_max: int | None = None
+    papers: int = 25
+
+
+@router.post("/search/topic")
+def search_topic_all_conferences(body: SearchTopicBody):
+    """A topic or abstract over every loaded conference: the k closest papers pooled,
+    counted per conference (per 1,000 papers), per year of a series and per institution."""
+    from services.conferences import search
+
+    if not body.query.strip():
+        raise HTTPException(status_code=422, detail="Empty query")
+    try:
+        return search.topic(body.query[:4000], k=body.k, series=body.series, field=body.field,
+                            year_min=body.year_min, year_max=body.year_max, library=library_titles(),
+                            paper_top=max(1, min(body.papers, 100)))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @router.get("/{key}/status")
 def conference_status(key: str):
     ed = _edition(key)

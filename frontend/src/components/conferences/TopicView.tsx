@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { conferenceTopic } from "../../api/client";
 import type { ConfArea, ConfTopic, ConfTopicInst } from "../../types";
 import AreaBar from "./AreaBar";
@@ -150,8 +151,17 @@ export default function TopicView({
       {res && (
         <>
           <div className="bg-raised border border-line rounded-xl p-5 space-y-3">
-            <div className="text-xl font-semibold text-ink">
-              Who publishes on <span className="text-accent">“{shortQ}”</span>
+            <div className="flex flex-wrap items-baseline gap-x-3">
+              <div className="text-xl font-semibold text-ink">
+                Who publishes on <span className="text-accent">“{shortQ}”</span>
+              </div>
+              <Link
+                to={res.query.length <= 300 ? `/conferences?kind=topic&q=${encodeURIComponent(res.query)}` : "/conferences?kind=topic"}
+                state={{ q: res.query }}
+                className="text-xs text-accent hover:underline"
+              >
+                Search all conferences →
+              </Link>
             </div>
             <div className="text-xs text-ink-2">
               The {res.k} closest of {res.total.toLocaleString()} papers at {confName} · {pct(res.with_industry / Math.max(1, res.k))} have a company author

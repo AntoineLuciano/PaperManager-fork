@@ -4,6 +4,7 @@ import { buildConference, getConference, getConferenceStatus, listConferences } 
 import type { ConfCatalog, ConfEdition, ConfOverview, ConfStatus } from "../types";
 import AreaBar from "../components/conferences/AreaBar";
 import InstitutionsView from "../components/conferences/InstitutionsView";
+import SearchAll from "../components/conferences/SearchAll";
 import TopicView from "../components/conferences/TopicView";
 
 const FIELDS = ["ML", "Vision", "NLP", "AI", "Robotics", "Data"];
@@ -52,6 +53,11 @@ function Landing() {
     navigate(`/conferences/${e.key}`);
   };
 
+  const loaded = useMemo(
+    () => (cat?.conferences ?? []).filter((c) => c.state === "ready" || c.state === "partial" || (c.state === "embedding" && c.papers)),
+    [cat],
+  );
+
   const series = useMemo(() => {
     const m = new Map<string, ConfEdition[]>();
     for (const c of cat?.conferences ?? []) {
@@ -69,11 +75,13 @@ function Landing() {
         <p className="mt-1 text-sm text-ink-2 max-w-3xl">
           Browse the accepted papers of the major ML, vision, NLP and robotics conferences by institution (rank, paper count,
           research-area mix, collaborators) or by topic (which universities and companies publish most on it, and the closest papers).
-          Pick a conference; ones not loaded yet are downloaded and indexed on this server, which takes a few minutes.
+          Search all loaded conferences at once below, or pick one; ones not loaded yet are downloaded and indexed on this server,
+          which takes a few minutes.
         </p>
       </div>
       {error && <p className="text-sm text-coral">{error}</p>}
       {!cat && !error && <p className="text-sm text-ink-3">Loading…</p>}
+      {cat && loaded.length > 0 && <SearchAll areas={cat.areas} editions={loaded} />}
       {cat && FIELDS.map((field) => {
         const rows = [...series.entries()].filter(([, eds]) => eds[0]?.field === field);
         if (!rows.length) return null;

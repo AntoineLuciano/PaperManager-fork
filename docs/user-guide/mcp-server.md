@@ -66,8 +66,10 @@ Ask Claude: *"Can you list my recent papers?"* — Claude should call `search_pa
 | `regenerate_summary` | Re-run the AI summary from the stored full text |
 | `delete_paper` | Delete a paper with its note, highlights and PDF (needs `confirm=true`) |
 | `list_conferences` | Conference-years the [conference explorer](conferences.md) has loaded |
-| `conference_topic` | Who publishes on a topic at a conference: top universities and companies, area mix, closest papers |
+| `conference_topic` | Who publishes on a topic at a conference: top universities and companies, area mix, closest papers; `conference="all"` for every loaded conference with papers per 1,000 per conference and the trend over years |
 | `conference_institution` | One institution at a conference: rank, counts, area mix, collaborators, papers |
+| `conference_search_papers` | Papers across all loaded conferences by title words (typos tolerated), then by meaning |
+| `conference_search_author` | An author across all loaded conferences: papers per conference with their institution on each, possible namesakes |
 
 ---
 

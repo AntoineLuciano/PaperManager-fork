@@ -124,7 +124,8 @@ protein structures you can rotate. Narrow a question with `@project:`, `@topic:`
 Browse the accepted papers of 22 conference series by institution (rank, research-area mix,
 collaborators, every paper) or by topic: type one or paste an abstract and see which
 universities and companies publish most on it and the closest papers, one click from your
-library.
+library. One search box covers all loaded conferences at once: papers, authors, and where a
+topic is published, per conference and over the years.
 
 [Conference explorer :octicons-arrow-right-24:](user-guide/conferences.md)
 </div>
@@ -158,7 +159,7 @@ library.
 
     ---
 
-    The MCP server gives Claude Desktop and Claude Code 38 tools to search, read and edit
+    The MCP server gives Claude Desktop and Claude Code 40 tools to search, read and edit
     your library.
 
     [:octicons-arrow-right-24: MCP server](user-guide/mcp-server.md)

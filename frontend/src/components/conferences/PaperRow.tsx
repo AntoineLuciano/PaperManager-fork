@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { addConferencePaper, getConferencePaper } from "../../api/client";
 import type { ConfArea, ConfPaper, ConfPaperDetail } from "../../types";
@@ -10,19 +10,25 @@ const DECISION_STYLE: Record<string, string> = {
 };
 
 /** One conference paper: title, match, area, decision, session, institutions; expands to
- *  abstract, authors with institutions and similar papers; adds itself to the library. */
+ *  abstract, authors with institutions and similar papers; adds itself to the library.
+ *  `conference` adds a chip linking to the conference (search across conferences);
+ *  `note` is an extra line under the metadata. */
 export default function PaperRow({
   confKey,
   paper,
   areas,
   onInstitution,
   focusSlug,
+  conference,
+  note,
 }: {
   confKey: string;
   paper: ConfPaper;
   areas: ConfArea[] | { name: string; short: string; color: string }[];
   onInstitution?: (slug: string) => void;
   focusSlug?: string;
+  conference?: { key: string; name: string };
+  note?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<ConfPaperDetail | null>(null);
@@ -65,6 +71,15 @@ export default function PaperRow({
             {paper.title}
           </button>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">
+            {conference && (
+              <Link
+                to={`/conferences/${conference.key}`}
+                className="px-1.5 py-px rounded bg-accent-lo text-accent border border-accent-border font-medium hover:bg-violet-100"
+                title={`Open ${conference.name}`}
+              >
+                {conference.name}
+              </Link>
+            )}
             {paper.match != null && (
               <span className="font-mono text-ink-2" title="Cosine similarity to your query">match {(paper.match * 100).toFixed(0)}</span>
             )}
@@ -99,6 +114,7 @@ export default function PaperRow({
             ))}
             {paper.more_institutions > 0 && <span>+{paper.more_institutions} more</span>}
           </div>
+          {note && <div className="mt-0.5 text-[11px] text-ink-2">{note}</div>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {link && (

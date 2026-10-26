@@ -211,3 +211,172 @@ def test_hong_kong_universities_stay_apart():
     assert institutions.split_and_normalise("City University of Hong Kong") == [("City University of Hong Kong", "A")]
     assert institutions.split_and_normalise("The University of Hong Kong") == [("University of Hong Kong", "A")]
     assert institutions.split_and_normalise("The Chinese University of Hong Kong") == [("CUHK", "A")]
+
+
+# ── search across conferences ─────────────────────────────────────────────────
+
+def _e(i: int, sign: float = 1.0) -> np.ndarray:
+    v = np.zeros(384, dtype=np.float32)
+    v[i] = sign
+    return v
+
+
+def _write_conf(tmp_path, key, papers, insts, emb, temb=None):
+    ed = catalog.get_edition(key)
+    ds = {
+        "key": key, "name": ed.name, "series": ed.series.name, "slug": ed.series.slug, "field": ed.series.field,
+        "year": ed.year, "source": ed.source, "source_url": "https://example.org", "fetched_at": "2026-10-25T00:00:00+00:00",
+        "partial": False, "expected": len(papers), "areas_ready": True, "insts": insts, "papers": papers,
+    }
+    store._finalise(ds)
+    (tmp_path / key).mkdir()
+    (tmp_path / key / "dataset.json").write_text(json.dumps(ds))
+    np.save(tmp_path / key / "emb.npy", np.stack(emb).astype(np.float16))
+    if temb is not None:
+        np.save(tmp_path / key / "emb_title.npy", np.stack(temb).astype(np.float16))
+    store._set_status(key, "ready", papers=len(papers), institutions=len(insts))
+
+
+def _paper(pid, title, authors, ai, abstract="", area=0):
+    return {"id": pid, "t": title, "a": abstract, "au": authors, "ai": ai,
+            "i": sorted({i for ids in ai for i in ids}), "ar": area, "d": "Poster", "tr": "", "s": "",
+            "u": f"https://x/{pid}", "f": "", "nt": "", "kw": []}
+
+
+@pytest.fixture()
+def three_confs(tmp_path, monkeypatch):
+    """NeurIPS 2025 (abstracts, title vectors built), NeurIPS 2026 (titles only, so its
+    vectors are title vectors) and ICLR 2026 (abstracts, title vectors not built yet).
+    Query vector e0: a1 and b1 score 1, fillers -0.01 ... -0.12, everything else -1."""
+    from services.conferences import search
+
+    monkeypatch.setattr(store, "_data_dir", tmp_path)
+    store._cache.clear()
+    with store._status_lock:
+        store._status.clear()
+    search._index = None
+    queued: list[str] = []
+    monkeypatch.setattr(store, "request_title_embeddings", lambda key: queued.append(key))
+    insts25 = [{"n": "University of Oxford", "s": "A"}, {"n": "Google", "s": "I"},
+               {"n": "Tsinghua University", "s": "A"}, {"n": "Stanford University", "s": "A"}]
+    p25 = [
+        _paper("a1", "Protein structure diffusion", ["Charlotte Deane", "Alice Smith"], [[0], [1]], "abs"),
+        _paper("a2", "Video generation at scale", ["Bob Lee"], [[1]], "abs", area=9),
+        _paper("a3", "Graph neural networks", ["Wei Wang"], [[2]], "abs"),
+        _paper("a4", "Another graph paper", ["Wei Wang"], [[3]], "abs"),
+    ]
+    v25 = [_e(0), _e(0, -1), _e(0, -1), _e(0, -1)]
+    _write_conf(tmp_path, "neurips2025", p25, insts25, v25, temb=v25)
+    insts26 = [{"n": "University of Oxford", "s": "A"}, {"n": "Google", "s": "I"}]
+    p26 = [
+        _paper("b1", "Diffusion models for protein design", ["Charlotte Deane", "Alice Smith"], [[0], []]),
+        _paper("b2", "Video diffusion", ["Bob Lee"], [[1]], area=9),
+    ] + [_paper(f"f{n}", f"Filler title number {n}", [], []) for n in range(12)]
+    v26 = [_e(0), _e(0, -1)]
+    for n in range(12):
+        v = _e(5) - 0.01 * (n + 1) * _e(0)
+        v26.append(v / np.linalg.norm(v))
+    _write_conf(tmp_path, "neurips2026", p26, insts26, v26)
+    _write_conf(tmp_path, "iclr2026", [_paper("c1", "Protein folding", ["Zed"], [[]], "abs")], [], [_e(0)])
+    from services.conferences import embedder
+
+    monkeypatch.setattr(embedder, "embed_query", lambda text: _e(0))
+    return queued
+
+
+def test_title_embedding_needed_and_backfilled(three_confs, tmp_path, monkeypatch):
+    from services.conferences import embedder
+
+    assert store.needs_title_embedding([{"t": "x", "a": "abstract"}])
+    assert not store.needs_title_embedding([{"t": "x", "a": "", "kw": []}])
+    assert store.load("neurips2026").temb is store.load("neurips2026").emb      # titles only: same vectors
+    assert store.load("iclr2026").temb is None
+    monkeypatch.setattr(embedder, "embed", lambda texts, max_length=256: np.stack([_e(1)] * len(texts)))
+    assert store.build_title_embeddings("iclr2026") is True
+    assert store.load("iclr2026").temb is not None
+    assert store.build_title_embeddings("iclr2026") is False                      # already there
+
+
+def test_search_papers_by_title(three_confs):
+    from services.conferences import search
+
+    res = search.search_papers("protein structure diffusion", limit=5)
+    assert res["title"][0]["id"] == "a1" and res["title"][0]["title_match"] == "exact"
+    assert res["title"][0]["conf_key"] == "neurips2025" and res["title"][0]["conf_year"] == 2025
+    assert "a1" not in {p["id"] for p in res["semantic"]}                          # not listed twice
+    assert res["title"][1]["id"] == "b1" and res["title"][1]["title_match"] == "most words"
+    # Closest by meaning among the rest: c1, through ICLR's title + abstract vectors (its
+    # title vectors are not built yet, which paper search tolerates and topic counts do not).
+    assert res["semantic"][0]["id"] == "c1"
+    typo = search.search_papers("difusion", limit=10, semantic=False)
+    assert {p["id"] for p in typo["title"]} == {"a1", "b1", "b2"}
+    pre = search.search_papers("video gen", limit=5, semantic=False)
+    assert pre["title"][0]["id"] == "a2" and pre["title"][0]["title_match"] == "prefix"
+    only26 = search.search_papers("diffusion", year_min=2026, semantic=False)
+    assert {p["conf_key"] for p in only26["title"]} == {"neurips2026"}
+    assert {c["key"] for c in search.search_papers("x", series="iclr")["conferences"]} == {"iclr2026"}
+
+
+def test_search_authors(three_confs):
+    from services.conferences import search
+
+    for q in ("deane", "Charlotte Deane", "Deane, Charlotte", "c deane", "Charlote Deane", "charlotte dea"):
+        res = search.search_authors(q)
+        assert [a["name"] for a in res["authors"]] == ["Charlotte Deane"], q
+    a = search.search_authors("Charlotte Deane")["authors"][0]
+    assert a["score"] == 100 and a["papers"] == 2 and a["conference_count"] == 2 and a["coauthors"] == 1
+    assert a["institutions"] == [{"name": "University of Oxford", "sector": "A", "papers": 2}]
+    assert [c["key"] for c in a["conferences"]] == ["neurips2026", "neurips2025"]     # newest first
+    assert a["conferences"][0]["papers_by_author"][0]["author_institutions"] == ["University of Oxford"]
+    assert a["identities"] == []                                                     # one person
+    wang = search.search_authors("wei wang")["authors"][0]
+    assert wang["papers"] == 2 and len(wang["identities"]) == 2                     # Tsinghua vs Stanford
+    assert search.search_authors("nobody here")["authors"] == []
+    assert search.search_authors("deane", year_max=2025)["authors"][0]["papers"] == 1
+
+
+def test_search_suggests_a_kind(three_confs):
+    from services.conferences import search
+
+    assert search.search("Charlotte Deane")["suggested"] == "author"
+    assert search.search("video diffusion")["suggested"] == "paper"
+    assert search.search(" ".join(["word"] * 20))["suggested"] == "topic"
+
+
+def test_topic_across_conferences(three_confs):
+    from services.conferences import search
+
+    res = search.topic("protein diffusion", k=10)
+    assert res["k"] == 10 and res["total"] == 18                    # ICLR 2026 skipped: no title vectors
+    assert [s["key"] for s in res["skipped"]] == ["iclr2026"] and three_confs == ["iclr2026"]
+    by = {c["key"]: c for c in res["conferences"]}
+    assert by["neurips2025"]["count"] == 1 and by["neurips2025"]["per_1k"] == 250.0
+    assert by["neurips2026"]["count"] == 9 and by["neurips2026"]["per_1k"] == round(9000 / 14, 2)
+    assert res["trend"][0]["series"] == "NeurIPS" and [p["year"] for p in res["trend"][0]["points"]] == [2025, 2026]
+    assert {p["id"] for p in res["papers"][:2]} == {"a1", "b1"}
+    oxford = res["academia"][0]
+    assert oxford["name"] == "University of Oxford" and oxford["count"] == 2      # merged over both years
+    assert {c["key"]: c["count"] for c in oxford["conferences"]} == {"neurips2025": 1, "neurips2026": 1}
+    assert oxford["papers"] == 2 and oxford["of_own"] == 1.0
+    assert [x["name"] for x in res["industry"]] == ["Google"]
+    assert res["with_institution"] == 2
+    only = search.topic("protein diffusion", k=10, series="neurips", year_min=2026)
+    assert [c["key"] for c in only["conferences"]] == ["neurips2026"] and only["trend"] == []
+
+
+@pytest.mark.asyncio
+async def test_search_endpoints(three_confs, monkeypatch):
+    from main import app
+    from routers import conferences as router
+
+    monkeypatch.setattr(router, "library_titles", lambda: {"proteinstructurediffusion": "lib-9"})
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        r = (await client.get("/conferences/search/query", params={"q": "deane"})).json()
+        assert r["suggested"] == "author" and r["authors"]["authors"][0]["papers"] == 2
+        assert r["authors"]["authors"][0]["conferences"][1]["papers_by_author"][0]["library_id"] == "lib-9"
+        r = (await client.get("/conferences/search/query", params={"q": "protein", "kind": "paper"})).json()
+        assert "authors" not in r and {p["id"] for p in r["papers"]["title"]} == {"a1", "b1", "c1"}
+        assert (await client.get("/conferences/search/query", params={"q": "x", "kind": "nope"})).status_code == 422
+        t = await client.post("/conferences/search/topic", json={"query": "protein", "k": 10})
+        assert t.status_code == 200 and t.json()["k"] == 10
+        assert (await client.post("/conferences/search/topic", json={"query": "  "})).status_code == 422
