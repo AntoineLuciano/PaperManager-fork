@@ -19,8 +19,10 @@ def test_get_file_url_format():
     assert url == "https://drive.google.com/file/d/abc123xyz/view"
 
 
-def test_upload_pdf_calls_drive_api():
+def test_upload_pdf_calls_drive_api(monkeypatch):
     """upload_pdf returns the file ID from the Drive API response."""
+    # Without a Drive folder (CI) storage defaults to local files; this test is about Drive.
+    monkeypatch.setattr("services.drive.settings.storage_backend", "drive")
     mock_service = MagicMock()
     mock_service.files().create().execute.return_value = {"id": "fake_file_id"}
 
