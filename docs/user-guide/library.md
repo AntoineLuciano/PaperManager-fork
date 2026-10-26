@@ -17,15 +17,76 @@ When no filters are active you see a dashboard at the top showing:
 
 ## Search
 
-The search bar at the top performs full-text search across:
+Type in the search box at the top. Results appear as you type (250 ms after the last
+keystroke, or at once on **Enter**), ranked by relevance, and every row says **why** it matched:
+chips such as *Title*, *Author: Tero Karras*, *Topic: Diffusion Models*, *Your note*,
+*Highlight*, *Full text* or *Meaning 0.78*, and one or two passages with the matched words
+marked.
 
-- Paper title
-- Abstract
-- AI-generated summary
+### What is searched
 
-Results update as you type. The search query is reflected in the URL so you can bookmark filtered views.
+| Where | Weight |
+|---|---|
+| DOI or arXiv id typed as the query | exact match, always first |
+| Title | highest; extra when every word or the whole query is in the title |
+| Authors | high; a query that is someone's name puts their papers first |
+| Your notes and your PDF highlights (with their comments) | high |
+| Topics, tags | medium |
+| Abstract, AI summary, extracted claims | medium |
+| Venue | low |
+| Extracted full text of the PDF | lowest (every word must occur in it) |
 
----
+A paper has to contain **every word** of the query somewhere in those fields (one word in the
+author list and another in the title is fine). If no paper does, the papers that contain some
+of the words are shown with a note saying so. Papers cited by many other papers in your
+library rank a little higher among equally good matches.
+
+Case and accents never matter: `edm`, `EDM` and `Edm` find the same papers, as do `Kynkaanniemi`
+and `Kynkäänniemi`, in the search, the suggestions and the filters.
+
+### Syntax
+
+| You type | It finds |
+|---|---|
+| `diffusion` | diffusion, diffusions, Diffusion-based (every word is also a prefix) |
+| `diffus*` | any word starting with *diffus* |
+| `scroe based` | score-based: words of 5+ letters tolerate one typo |
+| `"flow matching"` | the exact phrase only |
+| `alphafold3` | AlphaFold3 and AlphaFold 3 |
+| `over-conditioning`, `co-folding` | the two parts next to each other (over-conditioning, over conditioning) and the joined word (cofolding) |
+| `10.1038/s41586-024-07487-w`, `https://doi.org/…`, `2210.02747`, `arXiv:2210.02747` | that paper |
+| `the`, `of`, `for` … | ignored unless the query has nothing else |
+
+Other punctuation (`:`, brackets, slashes) is treated as a word break, so `title: diffusion` or
+`SE(3)` are safe to type.
+
+### Suggestions
+
+From the second character on, a dropdown lists matching **papers** (by title), **authors**,
+**topics**, **tags** and **projects** with their paper counts. Use ↑ / ↓ and **Enter**, or click:
+a paper opens it; an author, topic, tag or project becomes a filter (and the typed text is
+cleared). **Esc** closes the list.
+
+### Modes, sort, references
+
+Above the results:
+
+- **Exact** matches words only. **Hybrid** (the default) also ranks papers whose title and
+  abstract *mean* something close to the query, which helps for questions in plain language
+  ("why do co-folding models collapse to one pose"). **Meaning** ranks by meaning alone. Meaning
+  search needs a one-time embedding of the library in the background (a few minutes); until it
+  is ready, the page says so and shows exact matches.
+- **Sort**: Relevance (default with a query), Newest added, Year, Title. The sort in Settings
+  applies to browsing without a query.
+- **References**: also search the cited references that have no PDF in your library (hidden by
+  default; they rank below your own papers).
+
+The query, filters, mode, sort and the references switch are kept in the URL, so a search can
+be bookmarked or shared. When nothing matches, the page offers to search the references, to
+search by meaning, or to remove the filters.
+
+The **✦** button next to the box still turns a plain-language request into filters with the
+AI model.
 
 ## Filters {#filters}
 
@@ -36,9 +97,10 @@ The left sidebar provides filters that narrow down the paper list:
 | **Tag** | Shows papers tagged with the selected tag |
 | **Topic** | Shows papers about the selected research topic |
 | **Project** | Shows papers belonging to the selected project |
-| **Person** | Shows papers authored by or involving the selected person |
+| **Person** | Shows papers authored by or involving the selected person (pick an author in the search suggestions) |
 
-Multiple filters can be combined. Active filters appear as removable chips below the search bar.
+Multiple filters can be combined, with or without a search query. Active filters appear as
+removable chips below the search bar. Tag, topic and venue filters ignore case.
 
 ### Tag Categories
 

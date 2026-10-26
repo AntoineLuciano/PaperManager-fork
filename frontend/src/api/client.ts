@@ -1,5 +1,6 @@
 import type { T_IngestOut, ParsedMeta, GraphData, Reference, Conversation, KnowledgeMessage, SseEvent, BulkSseEvent, Figure, PaperTable, LiteratureSseEvent, Paper, Chapter, Blog, BlogPost, Note, Annotation, AnnotationColor, VenueOut, Claim , IdeogramCaption, IdeogramSessionStatus, IdeogramGenerateBody, IdeogramGenerateResult, Concept, ConceptsBackend, ConceptGeneration, ConfCatalog, ConfStatus, ConfOverview, ConfInstRow, ConfInstitution, ConfTopic, ConfPaperDetail } from "../types";
 import type { ConfSearch, ConfSearchTopic } from "../types";
+import type { SearchResponse, SearchSuggestions } from "../types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -1203,6 +1204,19 @@ export async function listVenues(minCount?: number, q?: string): Promise<VenueOu
 
 export async function getVenuePapers(venueName: string): Promise<Paper[]> {
   return apiFetch(`/venues/${encodeURIComponent(venueName)}/papers`);
+}
+
+// ── Library search ────────────────────────────────────────────────────────────
+
+/** Ranked library search (GET /search): pass q, filters, sort, mode, skip, limit. */
+export async function searchLibrary(params: URLSearchParams, signal?: AbortSignal): Promise<SearchResponse> {
+  return apiFetch(`/search?${params.toString()}`, signal ? { signal } : undefined);
+}
+
+/** Type-ahead suggestions: papers, authors, topics, tags and projects for a prefix. */
+export async function searchSuggest(q: string, limit = 5, signal?: AbortSignal): Promise<SearchSuggestions> {
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  return apiFetch(`/search/suggest?${params.toString()}`, signal ? { signal } : undefined);
 }
 
 // ── Natural-language search ───────────────────────────────────────────────────

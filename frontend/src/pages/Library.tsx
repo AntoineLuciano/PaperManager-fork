@@ -1,40 +1,81 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { apiFetch, interpretSearch, getVenuePapers } from "../api/client";
+import { apiFetch, interpretSearch, searchLibrary } from "../api/client";
 import PaperCard from "../components/PaperCard";
 import PaperDrop from "../components/PaperDrop";
 import EditPaperModal from "../components/EditPaperModal";
 import EntityPanel from "../components/EntityPanel";
 import ResearchGapPanel from "../components/ResearchGapPanel";
+import SearchBox, { type PickedSuggestion } from "../components/search/SearchBox";
+import SearchResultRow from "../components/search/SearchResultRow";
+import { buildSearchParams, FILTER_KEYS, QUERY_PAGE_ALL } from "../components/search/searchUtils";
 import type { EntityType } from "../components/EntityPanel";
 import { useAppSettings } from "../contexts/SettingsContext";
-import type { Paper, Project, SearchResponse, T_IngestOut, Stats, VenueOut } from "../types";
+import type { Paper, Person, Project, SearchMode, SearchResponse, T_IngestOut, Stats, VenueOut } from "../types";
 
+const QUERY_SORTS: { value: string; label: string }[] = [
+  { value: "relevance", label: "Relevance" },
+  { value: "date_desc", label: "Newest added" },
+  { value: "year_desc", label: "Year ↓" },
+  { value: "year_asc", label: "Year ↑" },
+  { value: "title_asc", label: "Title A→Z" },
+];
+const MODES: { value: SearchMode; label: string; title: string }[] = [
+  { value: "lexical", label: "Exact", title: "Words, prefixes and near-spellings only" },
+  { value: "hybrid", label: "Hybrid", title: "Words and meaning combined (default)" },
+  { value: "semantic", label: "Meaning", title: "Papers whose title and abstract mean something similar" },
+];
 export default function Library() {
   const { settings } = useAppSettings();
   const navigate = useNavigate();
   const [papers, setPapers]     = useState<Paper[]>([]);
+  const [searchRes, setSearchRes] = useState<SearchResponse | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [stats, setStats]           = useState<Stats | null>(null);
-  const [loading, setLoading]       = useState(true);
-  const [page, setPage]             = useState(1);
+  // Key of the request whose results are on screen; "loading" while it differs from the
+  // key of what the URL asks for (no synchronous setState in the fetch effect).
+  const [doneKey, setDoneKey]       = useState<string | null>(null);
   const [editingPaper, setEditingPaper] = useState<Paper | null>(null);
   const [activePanel, setActivePanel]   = useState<EntityType | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [surprisingMe, setSurprisingMe] = useState(false);
   const [showResearchGaps, setShowResearchGaps] = useState(false);
   const [aiSearching, setAiSearching] = useState(false);
+  const [personNames, setPersonNames] = useState<Record<string, string>>({});
 
   const q             = searchParams.get("q") ?? "";
   const activeTag     = searchParams.get("tag") ?? "";
   const activeTopic   = searchParams.get("topic") ?? "";
   const activeProject = searchParams.get("project_id") ?? "";
+  const activePerson  = searchParams.get("person_id") ?? "";
   const activeStatus  = searchParams.get("reading_status") ?? "";
   const activeBookmarked = searchParams.get("bookmarked") === "true";
   const activeVenue   = searchParams.get("venue") ?? "";
-  const hasFilters    = q || activeTag || activeTopic || activeProject || activeStatus || activeBookmarked || activeVenue;
+  const querySort     = searchParams.get("sort") || "relevance";
+  const queryMode     = (searchParams.get("mode") as SearchMode) || "hybrid";
+  const withRefs      = searchParams.get("refs") === "1";
+  const hasQuery      = q.trim().length > 0;
+  const hasNarrowing  = FILTER_KEYS.some((k) => searchParams.get(k));
+  const hasFilters    = hasQuery || hasNarrowing;
 
-  // Sort papers per settings
+  // The text in the box runs ahead of the URL while typing; the URL follows debounced.
+  const [input, setInput] = useState(q);
+  const lastCommitted = useRef(q);
+  useEffect(() => {
+    if (q !== lastCommitted.current) {
+      lastCommitted.current = q;
+      setInput(q);
+    }
+  }, [q]);
+
+  // Page number, reset whenever the query or a filter changes.
+  const queryKey = searchParams.toString();
+  const pageKey = `${queryKey}|${settings.defaultSort}|${settings.papersPerPage}`;
+  const [pageState, setPageState] = useState({ key: pageKey, page: 1 });
+  const page = pageState.key === pageKey ? pageState.page : 1;
+  const setPage = (p: number) => setPageState({ key: pageKey, page: p });
+
+  // Browsing (no query): sort client-side per settings. A query keeps the server's order.
   const sortedPapers = useMemo(() => {
     const sorted = [...papers];
     switch (settings.defaultSort) {
@@ -48,38 +89,40 @@ export default function Library() {
     }
   }, [papers, settings.defaultSort]);
 
-  // Paginate
   const perPage = settings.papersPerPage;
-  const totalPages = perPage === 0 ? 1 : Math.ceil(sortedPapers.length / perPage);
+  const querySize = perPage || QUERY_PAGE_ALL;
+  const totalPages = hasQuery
+    ? Math.max(1, Math.ceil((searchRes?.total ?? 0) / querySize))
+    : perPage === 0 ? 1 : Math.ceil(sortedPapers.length / perPage);
   const visiblePapers = perPage === 0 ? sortedPapers : sortedPapers.slice((page - 1) * perPage, page * perPage);
 
-  const loadPapers = async (params: URLSearchParams) => {
-    setLoading(true);
+  const requestKey = `${queryKey}|${hasQuery ? page : 0}|${hasQuery ? perPage : 0}`;
+  const loading = doneKey !== requestKey;
+  const latestKey = useRef(requestKey);
+
+  const loadPapers = async (params: URLSearchParams, pageNo: number, key: string) => {
+    latestKey.current = key;
+    const stale = () => latestKey.current !== key; // a newer keystroke won
     try {
-      const venue = params.get("venue");
-      if (venue) {
-        // Venue filter — fetch from venue endpoint, apply any remaining filters client-side
-        const all = await getVenuePapers(venue);
-        const tag = params.get("tag");
-        const q   = params.get("q")?.toLowerCase();
-        setPapers(all.filter((p) => {
-          if (q && !p.title.toLowerCase().includes(q) && !(p.abstract ?? "").toLowerCase().includes(q)) return false;
-          return !tag; // tag filtering would need separate lookup; omit for simplicity
-        }));
+      const hasQ = !!params.get("q")?.trim();
+      const narrowed = FILTER_KEYS.some((k) => params.get(k));
+      if (hasQ || narrowed) {
+        const res = await searchLibrary(buildSearchParams(params, pageNo, perPage));
+        if (stale()) return;
+        setSearchRes(hasQ ? res : null);
+        setPapers(res.results);
       } else {
-        const hasFilter = params.get("q") || params.get("tag") || params.get("topic") ||
-          params.get("project_id") || params.get("reading_status") || params.get("bookmarked");
-        if (hasFilter) {
-          const res = await apiFetch<SearchResponse>(`/search?${params}`);
-          setPapers(res.results);
-        } else {
-          const res = await apiFetch<Paper[]>("/papers");
-          setPapers(res);
-        }
+        const res = await apiFetch<Paper[]>("/papers");
+        if (stale()) return;
+        setSearchRes(null);
+        setPapers(res);
       }
-    } finally {
-      setLoading(false);
+    } catch {
+      if (stale()) return;
+      setPapers([]);
+      setSearchRes(null);
     }
+    setDoneKey(key);
   };
 
   useEffect(() => {
@@ -90,30 +133,83 @@ export default function Library() {
       setSearchParams(next, { replace: true });
       return;
     }
+    // State is only set once the request resolves (loadPapers awaits first).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadPapers(searchParams, page, requestKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey]);
 
-    loadPapers(searchParams);
+  useEffect(() => {
     apiFetch<Project[]>("/projects").then(setProjects).catch(() => {});
     apiFetch<Stats>("/stats").then(setStats).catch(() => {});
-  }, [searchParams.toString()]);
+  }, []);
 
-  // Reset to page 1 when sort or per-page changes
-  useEffect(() => { setPage(1); }, [settings.defaultSort, settings.papersPerPage]);
+  // Name for the author chip when the page was opened with ?person_id=...
+  useEffect(() => {
+    if (activePerson && !personNames[activePerson]) {
+      apiFetch<Person>(`/people/${activePerson}`)
+        .then((p) => setPersonNames((m) => ({ ...m, [activePerson]: p.name })))
+        .catch(() => {});
+    }
+  }, [activePerson, personNames]);
 
-  const setFilter = (key: string, value: string) => {
+  const update = (mutate: (next: URLSearchParams) => void, replace = false) => {
     const next = new URLSearchParams(searchParams);
+    mutate(next);
+    setSearchParams(next, { replace });
+  };
+
+  const setFilter = (key: string, value: string) => update((next) => {
     if (next.get(key) === value) next.delete(key);
     else next.set(key, value);
-    setSearchParams(next);
+  });
+
+  const setParam = (key: string, value: string | null) => update((next) => {
+    if (value) next.set(key, value);
+    else next.delete(key);
+  });
+
+  const commitQuery = (text: string) => {
+    if (text.trim() === q.trim()) return;
+    lastCommitted.current = text;
+    update((next) => {
+      if (text.trim()) next.set("q", text);
+      else next.delete("q");
+    }, true);
   };
 
-  const clearAll = () => setSearchParams(new URLSearchParams());
+  const pickSuggestion = (s: PickedSuggestion) => {
+    if (s.kind === "paper") {
+      navigate(`/paper/${s.id}`);
+      return;
+    }
+    // An author / topic / tag / project replaces the typed text with a filter.
+    lastCommitted.current = "";
+    setInput("");
+    update((next) => {
+      next.delete("q");
+      if (s.kind === "author") {
+        next.set("person_id", s.id);
+        setPersonNames((m) => ({ ...m, [s.id]: s.name }));
+      }
+      if (s.kind === "topic") next.set("topic", s.name);
+      if (s.kind === "tag") next.set("tag", s.name);
+      if (s.kind === "project") next.set("project_id", s.id);
+    });
+  };
 
-  const toggleBookmarked = () => {
-    const next = new URLSearchParams(searchParams);
+  const clearAll = () => {
+    lastCommitted.current = "";
+    setInput("");
+    setSearchParams(new URLSearchParams());
+  };
+
+  const clearNarrowing = () => update((next) => { FILTER_KEYS.forEach((k) => next.delete(k)); });
+
+  const toggleBookmarked = () => update((next) => {
     if (activeBookmarked) next.delete("bookmarked");
     else next.set("bookmarked", "true");
-    setSearchParams(next);
-  };
+  });
 
   const surpriseMe = async () => {
     setSurprisingMe(true);
@@ -128,10 +224,11 @@ export default function Library() {
   };
 
   const runAiSearch = async () => {
-    if (!q.trim() || aiSearching) return;
+    const text = input.trim();
+    if (!text || aiSearching) return;
     setAiSearching(true);
     try {
-      const result = await interpretSearch(q.trim());
+      const result = await interpretSearch(text);
       const next = new URLSearchParams();
       if (result.keyword) next.set("q", result.keyword);
       if (result.tag)     next.set("tag", result.tag);
@@ -157,29 +254,32 @@ export default function Library() {
     setEditingPaper(null);
   };
 
+  const semanticNote = (() => {
+    if (!searchRes || queryMode === "lexical" || searchRes.mode !== "lexical") return null;
+    const s = searchRes.semantic;
+    if (s && s.state !== "ready" && s.enabled) {
+      return s.state === "building" && s.todo
+        ? `Meaning search is still indexing (${s.done} / ${s.todo} papers); showing exact matches.`
+        : "Meaning search is starting up; showing exact matches.";
+    }
+    return queryMode === "semantic" ? "Nothing in the library is close enough in meaning; showing exact matches." : null;
+  })();
+
   return (
     <div className="h-[calc(100vh-53px)] overflow-y-auto">
       <main>
         {/* Search + upload + view toggle bar */}
-        <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-6 py-3 flex gap-2 items-center flex-wrap">
-          {/* Search + AI button */}
-          <div className="flex flex-1 min-w-[160px] items-center gap-1">
-            <input
-              type="search"
-              value={q}
-              onChange={(e) => {
-                const next = new URLSearchParams(searchParams);
-                if (e.target.value) next.set("q", e.target.value);
-                else next.delete("q");
-                setSearchParams(next);
-              }}
-              onKeyDown={(e) => { if (e.key === "Enter") runAiSearch(); }}
-              placeholder="Search… or describe in plain language and press ✦"
-              className="flex-1 h-9 border border-gray-200 rounded-lg px-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
-            />
+        <div className="sticky top-0 z-20 bg-raised border-b border-line-s px-6 py-3 flex gap-2 items-center flex-wrap">
+          <SearchBox
+            value={input}
+            onChange={setInput}
+            onCommit={commitQuery}
+            onPick={pickSuggestion}
+            placeholder="Search titles, authors, notes, highlights, full text… or describe it and press ✦"
+          >
             <button
               onClick={runAiSearch}
-              disabled={aiSearching || !q.trim()}
+              disabled={aiSearching || !input.trim()}
               title="Let AI interpret your query into filters"
               className={`h-9 px-2.5 rounded-lg border text-sm font-semibold transition-colors shrink-0 ${
                 aiSearching
@@ -191,17 +291,12 @@ export default function Library() {
                 ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
                 : "✦"}
             </button>
-          </div>
+          </SearchBox>
 
           {/* Reading status filter */}
           <select
             value={activeStatus}
-            onChange={(e) => {
-              const next = new URLSearchParams(searchParams);
-              if (e.target.value) next.set("reading_status", e.target.value);
-              else next.delete("reading_status");
-              setSearchParams(next);
-            }}
+            onChange={(e) => setParam("reading_status", e.target.value || null)}
             className="h-9 border border-gray-200 rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 bg-white text-gray-600 shrink-0"
           >
             <option value="">All statuses</option>
@@ -262,9 +357,15 @@ export default function Library() {
           {hasFilters && (
             <div className="flex flex-wrap gap-2 items-center">
               <span className="text-xs text-gray-500">Showing:</span>
-              {q            && <Chip label={`"${q}"`}    onRemove={() => setFilter("q", q)} />}
+              {q            && <Chip label={`"${q}"`}    onRemove={() => { lastCommitted.current = ""; setInput(""); setParam("q", null); }} />}
               {activeTag    && <Chip label={activeTag}   onRemove={() => setFilter("tag", activeTag)} />}
               {activeTopic  && <Chip label={activeTopic} onRemove={() => setFilter("topic", activeTopic)} />}
+              {activePerson && (
+                <Chip
+                  label={`Author: ${personNames[activePerson] ?? "…"}`}
+                  onRemove={() => setFilter("person_id", activePerson)}
+                />
+              )}
               {activeProject && (
                 <Chip
                   label={projects.find((p) => p.id === activeProject)?.name ?? activeProject}
@@ -290,11 +391,101 @@ export default function Library() {
             />
           )}
 
-          {/* Paper list — shown always, below dashboard */}
-          {loading ? (
+          {hasQuery ? (
+            <section className="space-y-3" aria-label="Search results">
+              {/* Results header: count, mode, sort, references */}
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-xs text-ink-3" aria-live="polite">
+                  {loading && !searchRes ? "Searching…" : searchRes && (
+                    <>
+                      <span className="font-semibold text-ink-2">{searchRes.total.toLocaleString()}</span>
+                      {` result${searchRes.total === 1 ? "" : "s"}`}
+                      {searchRes.took_ms != null && ` · ${Math.round(searchRes.took_ms)} ms`}
+                      {loading && " · updating…"}
+                    </>
+                  )}
+                </p>
+                <div className="flex items-center gap-2 ml-auto">
+                  <div role="group" aria-label="Search mode" className="flex rounded-lg border border-line overflow-hidden">
+                    {MODES.map((m) => (
+                      <button
+                        key={m.value}
+                        title={m.title}
+                        aria-pressed={queryMode === m.value}
+                        onClick={() => setParam("mode", m.value === "hybrid" ? null : m.value)}
+                        className={`px-2.5 h-7 text-xs ${queryMode === m.value ? "bg-accent text-white" : "bg-raised text-ink-2 hover:text-accent"}`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                  <label className="flex items-center gap-1 text-xs text-ink-2 cursor-pointer" title="Also search cited references that have no PDF in the library">
+                    <input type="checkbox" checked={withRefs} onChange={() => setParam("refs", withRefs ? null : "1")} />
+                    References
+                  </label>
+                  <select
+                    aria-label="Sort results"
+                    value={querySort}
+                    onChange={(e) => setParam("sort", e.target.value === "relevance" ? null : e.target.value)}
+                    className="h-7 border border-line rounded px-2 text-xs bg-raised text-ink-2 focus:outline-none focus:ring-2 focus:ring-violet-300"
+                  >
+                    {QUERY_SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {semanticNote && <p className="text-xs text-amber">{semanticNote}</p>}
+              {searchRes?.relaxed && searchRes.results.length > 0 && (
+                <p className="text-xs text-amber">
+                  No paper contains every word of “{q}”; showing papers that match some of them.
+                </p>
+              )}
+
+              {searchRes && searchRes.results.length === 0 && !loading ? (
+                <div className="bg-raised border border-line rounded-xl p-6 text-center space-y-3">
+                  <p className="text-sm text-ink">
+                    No papers match “{q}”{hasNarrowing ? " with these filters" : ""}.
+                  </p>
+                  <p className="text-xs text-ink-3">
+                    Titles, authors, topics, tags, abstracts, your notes and highlights, claims and full texts were searched.
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {!withRefs && (
+                      <button onClick={() => setParam("refs", "1")} className="px-3 py-1.5 text-xs border border-line text-ink-2 rounded-lg hover:border-accent-border hover:text-accent">
+                        Search cited references too
+                      </button>
+                    )}
+                    {queryMode !== "semantic" && (
+                      <button onClick={() => setParam("mode", "semantic")} className="px-3 py-1.5 text-xs border border-line text-ink-2 rounded-lg hover:border-accent-border hover:text-accent">
+                        Search by meaning
+                      </button>
+                    )}
+                    {hasNarrowing && (
+                      <button onClick={clearNarrowing} className="px-3 py-1.5 text-xs border border-line text-ink-2 rounded-lg hover:border-accent-border hover:text-accent">
+                        Remove filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <ul className={`space-y-2 ${loading ? "opacity-60" : ""}`}>
+                  {searchRes?.results.map((hit) => <SearchResultRow key={hit.id} hit={hit} />)}
+                </ul>
+              )}
+
+              {searchRes && totalPages > 1 && (
+                <Pager page={page} totalPages={totalPages} onPage={setPage} />
+              )}
+            </section>
+          ) : loading ? (
             <p className="text-sm text-gray-400">Loading…</p>
           ) : papers.length === 0 ? (
-            <p className="text-sm text-gray-400">No papers found.</p>
+            <div className="text-sm text-ink-3 space-y-2">
+              <p>No papers found{hasNarrowing ? " with these filters" : ""}.</p>
+              {hasNarrowing && (
+                <button onClick={clearNarrowing} className="text-xs text-accent underline">Remove filters</button>
+              )}
+            </div>
           ) : (
             <>
               {!hasFilters && (
@@ -312,28 +503,7 @@ export default function Library() {
                 ))}
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="px-3 py-1 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
-                  >
-                    ← Prev
-                  </button>
-                  <span className="text-xs text-gray-400">
-                    {page} / {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="px-3 py-1 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
-                  >
-                    Next →
-                  </button>
-                </div>
-              )}
+              {totalPages > 1 && <Pager page={page} totalPages={totalPages} onPage={setPage} />}
             </>
           )}
         </div>
@@ -355,9 +525,7 @@ export default function Library() {
           onStatsChanged={refreshStats}
           onTagClick={(name) => {
             setActivePanel(null);
-            const next = new URLSearchParams(searchParams);
-            next.set("tag", name);
-            setSearchParams(next);
+            update((next) => { next.set("tag", name); });
           }}
         />
       )}
@@ -368,6 +536,30 @@ export default function Library() {
           projectId={activeProject || undefined}
         />
       )}
+    </div>
+  );
+}
+
+function Pager({ page, totalPages, onPage }: { page: number; totalPages: number; onPage: (p: number) => void }) {
+  return (
+    <div className="flex items-center justify-center gap-2 pt-2">
+      <button
+        onClick={() => onPage(Math.max(1, page - 1))}
+        disabled={page === 1}
+        className="px-3 py-1 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+      >
+        ← Prev
+      </button>
+      <span className="text-xs text-gray-400">
+        {page} / {totalPages}
+      </span>
+      <button
+        onClick={() => onPage(Math.min(totalPages, page + 1))}
+        disabled={page === totalPages}
+        className="px-3 py-1 text-xs rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+      >
+        Next →
+      </button>
     </div>
   );
 }

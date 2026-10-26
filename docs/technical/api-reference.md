@@ -179,7 +179,9 @@ All endpoints are served from `http://localhost:8000`. Interactive API docs (Swa
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
-| `GET` | `/search` | Full-text + filtered search |
+| `GET` | `/search` | Ranked library search (titles, authors, topics, tags, venue, abstracts, notes, highlights, claims, full text; optional semantic blend), or filters only without `q` |
+| `GET` | `/search/suggest` | Type-ahead: `papers` (title), `authors`, `topics`, `tags`, `projects` for a prefix (`?q=&limit=5`); each entity with its paper count |
+| `GET` | `/search/status` | Semantic index state (`state`, `indexed`, `done`/`todo` while building) and the full-text indexes' state |
 | `GET` | `/graph` | Graph data for visualisation |
 | `POST` | `/graph/cypher` | Custom Cypher → graph nodes + links |
 | `GET` | `/stats` | Library statistics |
@@ -188,14 +190,31 @@ All endpoints are served from `http://localhost:8000`. Interactive API docs (Swa
 
 | Parameter | Type | Description |
 | --------- | ---- | ----------- |
-| `q` | string | Full-text query |
-| `tag` | string | Filter by tag name |
-| `topic` | string | Filter by topic name |
+| `q` | string | Query: words (prefix, one typo for 5+ letters), `"phrases"`, `word*`, a DOI or arXiv id. Case and accents are ignored |
+| `tag` | string | Filter by tag name (case-insensitive) |
+| `topic` | string | Filter by topic name (case-insensitive) |
 | `project_id` | string | Filter by project ID |
-| `person_id` | string | Filter by person ID |
+| `person_id` | string | Filter by person ID (authored or involved) |
+| `venue` | string | Filter by venue (case-insensitive) |
 | `year_min` | int | Minimum publication year |
 | `year_max` | int | Maximum publication year |
 | `reading_status` | string | Filter by reading status |
+| `bookmarked` | bool | Only bookmarked papers |
+| `include_references` | bool | Include reference stubs (tag `from-references`); default `true`, ranked below library papers |
+| `mode` | string | `lexical` (default), `hybrid` (lexical + embedding similarity, reciprocal-rank fusion) or `semantic`; falls back to lexical while the embedding index is not ready |
+| `sort` | string | `relevance` (default with `q`), `date_desc` (default without), `date_asc`, `year_desc`, `year_asc`, `title_asc` |
+| `snippets` | int | Passages per hit, 0–6 (default 2) |
+| `skip`, `limit` | int | Paging after ranking; `limit` 1–2000 (default 20) |
+
+Response: `{results, total, mode, relaxed, semantic, failed_sources, took_ms}`. `total` counts
+every hit, not just the page. Each hit is the paper plus `score`, `matched_in` (coarse, e.g.
+`note+paper`), `matched_fields` (`doi`, `title`, `author`, `topic`, `tag`, `venue`, `abstract`,
+`summary`, `note`, `highlight`, `claim`, `fulltext`, `semantic`), `matches` (matched author /
+topic / tag / venue names), `snippets` (`{field, text, marks, page?}`), `title_marks`, `authors`,
+`is_reference`, `similarity` (hybrid/semantic), `text_chars`, `has_note`, `highlight_count`,
+`projects`. `marks` are `[start, end)` offsets in code points. `relaxed: true` means no paper
+contained every word and partial matches are shown. Ranking, weights and indexes:
+`.specs/012_search.md`.
 
 ### `/graph` Query Parameters
 

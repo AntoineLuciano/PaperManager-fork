@@ -137,7 +137,7 @@ The app is started by `start.sh` via `uvicorn backend.main:app`.
 Runs on startup. Creates:
 
 - **Uniqueness constraints** on: `Paper.id`, `Person.id`, `Topic.id`, `Topic.name`, `Tag.id`, `Tag.name`, `Note.id`, `Project.id`, `Figure.id`, `Annotation.id`, `Blog.id`, `BlogPost.id`, `User.id`, `User.name`, `Claim.id`, `Table.id`, `Conversation.id`, `Message.id`, `Venue.id`
-- **Fulltext indexes**: `paper_search` (title, abstract, summary), `note_search` (content), `message_search` (content), `claim_search` (text)
+- **Fulltext indexes**: `paper_search` (title, abstract, summary), `note_search` (content), `annotation_search` (highlighted_text, note), `claim_search` (text), `entity_name_search` (Person/Topic/Tag/Project name), `paper_text_search` (venue, raw_text) with the `standard-folding` analyzer (rebuilt at startup if their analyzer or fields differ; see `.specs/012_search.md`), and `message_search` (content)
 - **Vector index**: `paper_embeddings` on `Paper.embedding` (768-dim cosine, nomic-embed-text)
 
 ---

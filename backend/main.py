@@ -79,6 +79,12 @@ async def lifespan(app: FastAPI):
         start_auto_build()
     except Exception as exc:  # noqa: BLE001 — the explorer must never block startup
         log.warning("Conference auto-build not started: %s", exc)
+    # Embed the library for semantic/hybrid search in the background (LIBRARY_SEMANTIC).
+    try:
+        from services.library_search.semantic import start_background
+        start_background()
+    except Exception as exc:  # noqa: BLE001 — semantic search must never block startup
+        log.warning("Library embedding thread not started: %s", exc)
     yield
     log.info("PaperManager backend shutting down")
 

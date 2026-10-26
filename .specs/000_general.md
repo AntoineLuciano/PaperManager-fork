@@ -15,6 +15,7 @@ It is built for a single primary user with optional teammate/multi-user support.
 | PDF upload | Drag-drop PDF → 4-layer metadata extraction → AI summary → figures → references |
 | URL / DOI ingest | Paste arXiv, DOI, PubMed, bioRxiv URL → fetch metadata, no PDF stored |
 | Bulk import | JSON list of URLs/DOIs/titles → streaming progress |
+| Library search | Ranked search over titles, authors, topics, tags, notes, highlights, claims, full text; type-ahead; hybrid with bge-small embeddings (`.specs/012_search.md`) |
 | Literature search | Query arXiv / PubMed / bioRxiv by keyword, import results |
 | Blog reader | Register RSS feeds, import posts, AI-summarise, add to projects |
 | Knowledge graph | WebGL force-graph visualisation of papers, authors, topics, tags, projects |

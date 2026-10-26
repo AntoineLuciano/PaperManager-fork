@@ -177,6 +177,16 @@ class FakeCypherSession:
     def run(self, query: str, **params) -> FakeResult:
         q = query.strip()
 
+        # Library search (services/library_search/engine.py): each source query carries a
+        # /*search:<source>*/ marker; page hydration asks for "AS authors" by id list.
+        m = re.search(r"/\*search:(\w+)\*/", q)
+        if m:
+            return self._library_search(m.group(1), params)
+        if "p.id IN $ids" in q and "AS authors" in q:
+            return self._library_hydrate(params)
+        if "p.id IN $ids" in q and "$needles" in q:
+            return FakeResult([])
+
         # CREATE (p:Label $props) RETURN p
         m = re.search(r"CREATE\s+\((\w+):(\w+)\s+\$(\w+)\)\s+RETURN\s+\w+", q)
         if m:
@@ -554,6 +564,55 @@ class FakeCypherSession:
 
         # Default empty result
         return FakeResult([])
+
+    # ── library search ──────────────────────────────────────────────────────────
+
+    _LUCENE_WORDS = re.compile(r"[a-z0-9]+")
+    _LUCENE_NOISE = {"title", "abstract", "summary", "name", "venue", "raw_text", "text",
+                     "content", "or", "and"}
+
+    def _search_terms(self, lq: str) -> set[str]:
+        """The words of a Lucene query built by services.library_search.query, without
+        field names, boosts, operators and the fuzzy/prefix suffixes."""
+        lq = re.sub(r"\w+:", " ", lq.lower())
+        lq = re.sub(r"\^[\d.]+|~\d", " ", lq)
+        return {w for w in self._LUCENE_WORDS.findall(lq) if w not in self._LUCENE_NOISE and not w.isdigit()}
+
+    def _search_row(self, paper: FakeNode, **extra) -> FakeRecord:
+        return FakeRecord({
+            "id": paper.props.get("id"), "title": paper.props.get("title"),
+            "year": paper.props.get("year"), "created_at": paper.props.get("created_at"),
+            "ref": self._has_tag(paper, "from-references"), **extra,
+        })
+
+    def _library_search(self, source: str, params: dict) -> FakeResult:
+        terms = self._search_terms(params.get("lq", ""))
+        rows = []
+        if source == "paper":
+            for p in self.store.find_nodes("Paper"):
+                abstract, summary = p.props.get("abstract"), p.props.get("summary")
+                text = " ".join(str(p.props.get(k) or "") for k in ("title", "abstract", "summary")).lower()
+                if any(t in text for t in terms):
+                    rows.append(self._search_row(p, score=1.0, abstract=abstract, summary=summary))
+        elif source == "note":
+            for r in self.store.relationships:
+                if r.rel_type == "HAS_NOTE":
+                    content = r.end_node.props.get("content") or ""
+                    if any(t in content.lower() for t in terms):
+                        rows.append(self._search_row(r.start_node, score=1.0, text=content))
+        return FakeResult(rows)
+
+    def _library_hydrate(self, params: dict) -> FakeResult:
+        rows = []
+        for pid in params.get("ids", []):
+            p = self.store.find_node("Paper", id=pid)
+            if p is not None:
+                rows.append(FakeRecord({
+                    "id": pid, "p": dict(p.props), "added_by": None, "added_by_color": None,
+                    "authors": [], "text_chars": len(p.props.get("raw_text") or ""),
+                    "has_note": False, "highlight_count": 0, "projects": [],
+                }))
+        return FakeResult(rows)
 
     def _has_tag(self, node: FakeNode, tag_name: str) -> bool:
         for r in self.store.relationships:

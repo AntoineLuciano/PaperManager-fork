@@ -273,11 +273,17 @@ Paper.id, Person.id, Topic.id, Topic.name, Tag.id, Tag.name, Note.id, Project.id
 
 | Name | Type | Nodes / Properties | Used by |
 |---|---|---|---|
-| `paper_search` | Fulltext | Paper(title, abstract, summary) | `/search` |
-| `note_search` | Fulltext | Note(content) | Note search |
+| `paper_search` | Fulltext, standard-folding | Paper(title, abstract, summary) | `/search`, suggest |
+| `note_search` | Fulltext, standard-folding | Note(content) | `/search` |
+| `annotation_search` | Fulltext, standard-folding | Annotation(highlighted_text, note) | `/search` |
+| `claim_search` | Fulltext, standard-folding | Claim(text) | `/search`, `/claims/search` |
+| `entity_name_search` | Fulltext, standard-folding | Person/Topic/Tag/Project(name) | `/search`, suggest |
+| `paper_text_search` | Fulltext, standard-folding, eventually consistent | Paper(venue, raw_text) | `/search` |
 | `message_search` | Fulltext | Message(content) | Conversation search |
-| `claim_search` | Fulltext | Claim(text) | `/claims/search` |
 | `paper_embeddings` | Vector (cosine, 768-dim) | Paper(embedding) | Semantic similarity (nomic-embed-text) |
+
+The library search's own embeddings (bge-small, 384-dim) are a file on disk, not a Neo4j
+index: `/data/library_search/emb.npy` + `meta.json`, see `.specs/012_search.md`.
 
 ---
 

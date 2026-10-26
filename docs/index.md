@@ -53,8 +53,9 @@ concept map in about ten minutes.
 
 ### One library for every paper
 
-Search the full text, filter by project, topic, tag, author or reading status, and see at a
-glance what is still unread.
+Search titles, authors, your notes and highlights and the full text in one box, ranked, with
+every hit showing why it matched; filter by project, topic, tag, author or reading status, and see
+at a glance what is still unread.
 
 [Library :octicons-arrow-right-24:](user-guide/library.md)
 </div>

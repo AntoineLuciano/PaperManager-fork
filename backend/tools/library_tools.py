@@ -18,8 +18,8 @@ from mcp.server.fastmcp import FastMCP
 from config import settings
 from db.connection import get_driver
 from db.queries.visibility import paper_visibility_clause
+from services.library_search.engine import Filters, search as _search
 
-_LUCENE_SPECIAL = re.compile(r'([+\-&|!(){}\[\]^"~*?:\\/])')
 # Claude Code moves MCP results above ~50 KB out of context into a file, which the
 # model then has to open with another tool; every result here stays well below that.
 _READ_MAX = 30000
@@ -31,17 +31,13 @@ def _url(paper_id: str) -> str:
     return f"{settings.frontend_url.rstrip('/')}/paper/{paper_id}"
 
 
-def _lucene(q: str) -> str:
-    """Escape a free-text query for the Neo4j full-text indexes."""
-    return _LUCENE_SPECIAL.sub(r"\\\1", q.strip())
-
-
-def _snippet(text: str, needle: str, width: int = 220) -> str:
-    i = text.lower().find(needle.lower())
-    if i < 0:
-        return text[:width].strip()
-    a, b = max(0, i - width // 2), min(len(text), i + len(needle) + width // 2)
-    return ("…" if a else "") + text[a:b].replace("\n", " ").strip() + ("…" if b < len(text) else "")
+def _marked(sn: dict) -> str:
+    """A search snippet as plain text with the matched words in «»."""
+    text, out, at = sn["text"], [], 0
+    for s, e in sn.get("marks", []):
+        out += [text[at:s], "«", text[s:e], "»"]
+        at = e
+    return "".join(out + [text[at:]])
 
 
 def _project_filter(var: str = "p") -> str:
@@ -83,76 +79,40 @@ def register(mcp: FastMCP):
     def library_search(query: str, project: str = "", limit: int = 12) -> dict:
         """Search the whole library for a topic and report WHERE each paper matched.
 
-        Looks in paper titles/abstracts/summaries, the user's own notes, the user's PDF
-        highlights and their comments, extracted claims, and the extracted full text.
+        Looks in titles, authors, topics, tags, venue, abstracts/summaries, the user's own
+        notes, the user's PDF highlights and their comments, extracted claims and the
+        extracted full text (the same ranked search as the app's library page), blended
+        with embedding similarity of title + abstract. Quote a phrase to require it.
         `project` restricts to one project (name, e.g. "MasterThesis", or id).
-        Each hit lists `matched_in` and short `evidence` snippets, plus whether the paper
-        has full text (`text_chars`), a note, and how many highlights — use
-        get_paper_context and read_paper_text / find_in_paper to go deeper."""
+        Each hit lists `matched_in` and short `evidence` snippets (matched words in
+        «»), plus whether the paper has full text (`text_chars`), a note, and how many
+        highlights — use get_paper_context and read_paper_text / find_in_paper to go deeper."""
         q = query.strip()
         if not q:
             return {"query": query, "hits": [], "error": "empty query"}
         limit = max(1, min(int(limit), 40))
-        vis, vis_params = paper_visibility_clause("p")
-        params = {"q": _lucene(q), "raw": q.lower(), "project": project.strip(), "k": limit * 3, **vis_params}
-        hits: dict[str, dict] = {}
-
-        def add(pid: str, title: str, year, source: str, score: float, evidence: str | None = None):
-            h = hits.setdefault(pid, {"paper_id": pid, "title": title, "year": year, "score": 0.0,
-                                      "matched_in": [], "evidence": []})
-            if source not in h["matched_in"]:
-                h["matched_in"].append(source)
-            h["score"] += score
-            if evidence and len(h["evidence"]) < 4:
-                h["evidence"].append({"from": source, "text": evidence})
-
-        where = f"{vis} AND {_project_filter('p')}"
-        with get_driver().session() as s:
-            for r in s.run(
-                f"""CALL db.index.fulltext.queryNodes('paper_search', $q) YIELD node AS p, score
-                    WHERE {where}
-                    RETURN p.id AS id, p.title AS title, p.year AS year, score,
-                           coalesce(p.abstract, p.summary, '') AS body LIMIT $k""", params):
-                add(r["id"], r["title"], r["year"], "metadata", r["score"], _snippet(r["body"], q) if r["body"] else None)
-            for r in s.run(
-                f"""CALL db.index.fulltext.queryNodes('note_search', $q) YIELD node AS n, score
-                    MATCH (p:Paper)-[:HAS_NOTE]->(n) WHERE {where}
-                    RETURN p.id AS id, p.title AS title, p.year AS year, score, n.content AS body LIMIT $k""", params):
-                add(r["id"], r["title"], r["year"], "note", r["score"] + 2.0, _snippet(r["body"] or "", q))
-            for r in s.run(
-                f"""CALL db.index.fulltext.queryNodes('claim_search', $q) YIELD node AS c, score
-                    MATCH (p:Paper)-[:HAS_CLAIM]->(c) WHERE {where}
-                    RETURN p.id AS id, p.title AS title, p.year AS year, score, c.text AS body LIMIT $k""", params):
-                add(r["id"], r["title"], r["year"], "claim", r["score"], r["body"])
-            for r in s.run(
-                f"""MATCH (p:Paper)-[:HAS_ANNOTATION]->(a:Annotation)
-                    WHERE (toLower(coalesce(a.highlighted_text, '')) CONTAINS $raw
-                           OR toLower(coalesce(a.note, '')) CONTAINS $raw) AND {where}
-                    RETURN p.id AS id, p.title AS title, p.year AS year,
-                           a.highlighted_text AS hl, a.note AS note, a.page_number AS page LIMIT $k""", params):
-                ev = f"p.{r['page']}: “{r['hl']}”" + (f" — {r['note']}" if r["note"] else "")
-                add(r["id"], r["title"], r["year"], "highlight", 3.0, ev)
-            for r in s.run(
-                f"""MATCH (p:Paper) WHERE p.raw_text IS NOT NULL AND {where}
-                      AND toLower(p.raw_text) CONTAINS $raw
-                    RETURN p.id AS id, p.title AS title, p.year AS year, p.raw_text AS body LIMIT $k""", params):
-                add(r["id"], r["title"], r["year"], "full_text", 1.0, _snippet(r["body"], q))
-
-            ranked = sorted(hits.values(), key=lambda h: h["score"], reverse=True)[:limit]
-            ids = [h["paper_id"] for h in ranked]
-            info = {r["id"]: r for r in s.run(
-                """MATCH (p:Paper) WHERE p.id IN $ids
-                   RETURN p.id AS id, size(coalesce(p.raw_text, '')) AS chars,
-                          EXISTS { (p)-[:HAS_NOTE]->() } AS has_note,
-                          COUNT { (p)-[:HAS_ANNOTATION]->() } AS highlights,
-                          [(p)-[:IN_PROJECT]->(pr:Project) | pr.name] AS projects""", ids=ids)}
-        for h in ranked:
-            i = info.get(h["paper_id"])
-            h["score"] = round(h["score"], 2)
-            h.update(text_chars=i["chars"] if i else 0, has_note=bool(i and i["has_note"]),
-                     highlights=i["highlights"] if i else 0, projects=i["projects"] if i else [],
-                     url=_url(h["paper_id"]))
-        return {"query": query, "project": project or None, "hits": ranked}
+        try:
+            from services.library_search import semantic
+            semantic.ensure_loaded()
+        except Exception:  # noqa: BLE001 — lexical search works without it
+            pass
+        res = _search(get_driver(), q, Filters(project=project.strip() or None), limit=limit,
+                      mode="hybrid", max_snippets=4)
+        hits = []
+        for p in res["results"]:
+            evidence = [{"from": sn["field"], "text": _marked(sn)} for sn in p["snippets"]]
+            for f, names in p.get("matches", {}).items():
+                evidence.append({"from": f, "text": ", ".join(names)})
+            hits.append({
+                "paper_id": p["id"], "title": p.get("title"), "year": p.get("year"),
+                "score": round(p["score"], 4), "matched_in": p["matched_fields"],
+                "evidence": evidence[:5], "text_chars": p.get("text_chars", 0),
+                "has_note": p.get("has_note", False), "highlights": p.get("highlight_count", 0),
+                "projects": p.get("projects", []), "reference_stub": p.get("is_reference", False),
+                "url": _url(p["id"]),
+            })
+        return {"query": query, "project": project or None, "total": res["total"],
+                "mode": res["mode"], "hits": hits}
 
     @mcp.tool()
     def get_paper_context(paper_id: str) -> dict:

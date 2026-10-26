@@ -349,10 +349,13 @@ A table extracted from a paper PDF.
 
 | Index name | Type | Nodes | Properties | Used by |
 | ---------- | ---- | ----- | ---------- | ------- |
-| `paper_search` | Fulltext | Paper | `title`, `abstract`, `summary` | `/search` endpoint |
-| `note_search` | Fulltext | Note | `content` | Note search |
+| `paper_search` | Fulltext (standard-folding) | Paper | `title`, `abstract`, `summary` | `/search`, `/search/suggest` |
+| `note_search` | Fulltext (standard-folding) | Note | `content` | `/search` |
+| `annotation_search` | Fulltext (standard-folding) | Annotation | `highlighted_text`, `note` | `/search` |
+| `claim_search` | Fulltext (standard-folding) | Claim | `text` | `/search`, `/claims/search` |
+| `entity_name_search` | Fulltext (standard-folding) | Person, Topic, Tag, Project | `name` | `/search`, `/search/suggest` |
+| `paper_text_search` | Fulltext (standard-folding, eventually consistent) | Paper | `venue`, `raw_text` | `/search` |
 | `message_search` | Fulltext | Message | `content` | Conversation search |
-| `claim_search` | Fulltext | Claim | `text` | `/claims/search` |
 | `paper_embeddings` | Vector (cosine) | Paper | `embedding` | Semantic similarity (768-dim, nomic-embed-text) |
 
 ---

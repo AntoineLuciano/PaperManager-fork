@@ -145,3 +145,43 @@ so the feature works in the default self-hosted setup.
 and colour at every venue, so conferences can be compared. Embeddings are centred on the
 conference mean before assignment; without it the most generic area absorbed a fifth of NeurIPS.
 
+
+---
+
+## 2026-10-26 — Library search
+
+### One ranked search over every source, scored in Python
+The old `/search` passed the raw query to two Lucene indexes (titles/abstracts/summaries and
+notes), crashed on `:` or `-`, and could not find a paper by author, DOI, highlight or full
+text. Now each source (paper fields, author/topic/tag names, venue, notes, highlights, claims,
+full text, DOI/arXiv id) gets its own Lucene query, and the per-paper merge, coverage check and
+scoring happen in Python (`services/library_search/`). Lucene scores are not comparable across
+indexes, so each source is normalised by its best score and weighted; title and author bonuses
+come from the title and names themselves. Pure functions, so the ranking is unit-tested without
+Neo4j, and the MCP `library_search` tool uses the same engine.
+
+### Every word must match somewhere, relaxed only when nothing does
+Lucene's default OR returned any paper with any word ("antibody docking" → every antibody
+paper). A hit must now cover every query word across its fields (author + title counts); only
+when no paper does are partial matches shown, flagged `relaxed`.
+
+### standard-folding analyzer, indexes rebuilt at startup
+Case and accents must not matter (`Kynkaanniemi` = `Kynkäänniemi`). The search indexes moved to
+Neo4j's `standard-folding` analyzer and the query terms are folded the same way in Python (prefix
+and fuzzy terms bypass Lucene's analyzer). `db/schema.py` drops and rebuilds an index whose
+analyzer differs: seconds on this library, and simpler than versioned index names.
+
+### Full text in Lucene, not `CONTAINS`
+The MCP tool scanned `toLower(p.raw_text) CONTAINS` over every paper: 220–270 ms per query on 36 MB
+of text. A full-text index on `raw_text` (eventually consistent, so uploads do not wait) costs
+13 MB and answers in single-digit milliseconds.
+
+### Hybrid by reciprocal-rank fusion, semantic weight scaled by confidence
+Library embeddings reuse the conference explorer's bge-small (no new dependency), stored in a
+file like the conference vectors, synced incrementally by a background thread. Semantic and
+lexical lists are fused by weighted RRF; the semantic weight shrinks when even the best cosine
+is low (jargon the model does not know), the lexical weight when the query is a long question.
+
+### Library citations as a prior
+Among many papers matching "flow matching", the one most cited by the library's own papers is
+almost always the one meant. Scores are multiplied by `1 + 0.12 ln(1 + citing papers)`.

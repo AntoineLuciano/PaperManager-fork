@@ -25,15 +25,25 @@ _CONSTRAINTS = [
     "CREATE CONSTRAINT map_concept_key IF NOT EXISTS FOR (c:MapConcept) REQUIRE c.key IS UNIQUE",
 ]
 
+# Full-text indexes of the library search (.specs/012_search.md), analysed with
+# standard-folding: lower case, accents folded (Tübingen = Tubingen), English stop words
+# dropped. (name, label pattern, properties, eventually consistent). The full-text index
+# on raw_text is eventually consistent so an upload does not wait for Lucene to index
+# ~100 kB of text. An existing index with another analyzer or other properties is dropped
+# and rebuilt at startup (seconds on a library of ~9k papers; see _ensure_fulltext).
+SEARCH_ANALYZER = "standard-folding"
+_SEARCH_INDEXES = [
+    ("paper_search", "n:Paper", ["title", "abstract", "summary"], False),
+    ("note_search", "n:Note", ["content"], False),
+    ("claim_search", "n:Claim", ["text"], False),
+    ("entity_name_search", "n:Person|Topic|Tag|Project", ["name"], False),
+    ("annotation_search", "n:Annotation", ["highlighted_text", "note"], False),
+    ("paper_text_search", "n:Paper", ["venue", "raw_text"], True),
+]
+
 _INDEXES = [
-    """CREATE FULLTEXT INDEX paper_search IF NOT EXISTS
-       FOR (n:Paper) ON EACH [n.title, n.abstract, n.summary]""",
-    """CREATE FULLTEXT INDEX note_search IF NOT EXISTS
-       FOR (n:Note) ON EACH [n.content]""",
     """CREATE FULLTEXT INDEX message_search IF NOT EXISTS
        FOR (n:Message) ON EACH [n.content]""",
-    """CREATE FULLTEXT INDEX claim_search IF NOT EXISTS
-       FOR (c:Claim) ON EACH [c.text]""",
     # Vector index for semantic similarity search (nomic-embed-text, 768-dim)
     """CREATE VECTOR INDEX paper_embeddings IF NOT EXISTS
        FOR (n:Paper) ON n.embedding
@@ -44,7 +54,33 @@ _INDEXES = [
 ]
 
 
+def fulltext_statement(name: str, pattern: str, props: list[str], eventual: bool) -> str:
+    on = ", ".join(f"n.{p}" for p in props)
+    config = f"`fulltext.analyzer`: '{SEARCH_ANALYZER}'"
+    if eventual:
+        config += ", `fulltext.eventually_consistent`: true"
+    return (f"CREATE FULLTEXT INDEX {name} IF NOT EXISTS FOR ({pattern}) ON EACH [{on}] "
+            f"OPTIONS {{indexConfig: {{{config}}}}}")
+
+
+def _ensure_fulltext(session) -> None:
+    existing = {r["name"]: r for r in session.run(
+        "SHOW FULLTEXT INDEXES YIELD name, properties, options RETURN name, properties, options")}
+    for name, pattern, props, eventual in _SEARCH_INDEXES:
+        cur = existing.get(name)
+        if cur is not None:
+            cfg = (cur["options"] or {}).get("indexConfig", {})
+            same = (cfg.get("fulltext.analyzer") == SEARCH_ANALYZER
+                    and list(cur["properties"] or []) == props
+                    and bool(cfg.get("fulltext.eventually_consistent")) == eventual)
+            if same:
+                continue
+            session.run(f"DROP INDEX {name} IF EXISTS").consume()
+        session.run(fulltext_statement(name, pattern, props, eventual)).consume()
+
+
 def run_schema_setup(driver: Driver):
     with driver.session() as session:
         for stmt in _CONSTRAINTS + _INDEXES:
             session.run(stmt)
+        _ensure_fulltext(session)

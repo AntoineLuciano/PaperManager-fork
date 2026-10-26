@@ -1,6 +1,6 @@
 import json
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from typing import Optional
 from pydantic import BaseModel
 from db.connection import get_driver
@@ -17,13 +17,19 @@ def search(
     topic: Optional[str] = None,
     project_id: Optional[str] = None,
     person_id: Optional[str] = None,
+    venue: Optional[str] = None,
     year_min: Optional[int] = None,
     year_max: Optional[int] = None,
     reading_status: Optional[str] = None,
     bookmarked: Optional[bool] = None,
-    skip: int = 0,
-    limit: int = 20,
+    include_references: bool = True,
+    sort: str = Query("relevance", description="relevance | date_desc | date_asc | year_desc | year_asc | title_asc"),
+    mode: str = Query("lexical", description="lexical | hybrid | semantic"),
+    snippets: int = Query(2, ge=0, le=6),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=2000),
 ):
+    """Ranked library search (see .specs/012_search.md), or filters only without ``q``."""
     return search_papers(
         get_driver(),
         q=q,
@@ -37,7 +43,32 @@ def search(
         bookmarked=bookmarked,
         skip=skip,
         limit=limit,
+        venue=venue,
+        include_references=include_references,
+        sort=sort if (q and q.strip()) or sort != "relevance" else "date_desc",
+        mode=mode,
+        max_snippets=snippets,
     )
+
+
+@router.get("/suggest")
+def search_suggest(q: str = "", limit: int = Query(5, ge=1, le=10)):
+    """Type-ahead: papers by title, authors, topics, tags and projects for a prefix."""
+    from services.library_search.suggest import suggest
+
+    return suggest(get_driver(), q, limit=limit)
+
+
+@router.get("/status")
+def search_status():
+    """State of the semantic index (building / ready, papers indexed) and the search indexes."""
+    from services.library_search import semantic
+
+    with get_driver().session() as s:
+        indexes = [dict(r) for r in s.run(
+            "SHOW FULLTEXT INDEXES YIELD name, state, populationPercent "
+            "RETURN name, state, populationPercent ORDER BY name")]
+    return {"semantic": semantic.status(), "indexes": indexes}
 
 
 class InterpretBody(BaseModel):

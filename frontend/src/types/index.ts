@@ -73,14 +73,65 @@ export interface Note {
   updated_at: string;
 }
 
+/** Where a library-search hit matched (GET /search, `matched_fields`). */
+export type SearchField =
+  | "doi" | "title" | "author" | "topic" | "tag" | "venue" | "abstract" | "summary"
+  | "note" | "highlight" | "claim" | "fulltext" | "semantic";
+
+/** A passage of a hit; `marks` are [start, end) code-point ranges of matched words in `text`. */
+export interface SearchSnippet {
+  field: SearchField;
+  text: string;
+  marks: [number, number][];
+  page?: number;
+}
+
 export interface SearchResult extends Paper {
   score: number;
-  matched_in: string;
+  matched_in: string;               // coarse, e.g. "note+paper" (older clients)
+  matched_fields?: SearchField[];
+  matches?: Partial<Record<"author" | "topic" | "tag" | "venue", string[]>>;
+  snippets?: SearchSnippet[];
+  title_marks?: [number, number][];
+  authors?: string[];
+  is_reference?: boolean;
+  similarity?: number;
+  text_chars?: number;
+  has_note?: boolean;
+  highlight_count?: number;
+  projects?: string[];
+}
+
+export type SearchMode = "lexical" | "hybrid" | "semantic";
+
+export interface SemanticIndexStatus {
+  state: "idle" | "loading" | "building" | "ready" | "error";
+  done: number;
+  todo: number;
+  indexed: number;
+  papers: number;
+  enabled: boolean;
+  model_loaded: boolean;
+  top_similarity?: number;
 }
 
 export interface SearchResponse {
   results: SearchResult[];
   total: number;
+  mode?: SearchMode;                // the mode actually used
+  relaxed?: boolean;                // no hit had every word; partial matches shown
+  semantic?: SemanticIndexStatus | null;
+  failed_sources?: string[];
+  took_ms?: number;
+}
+
+export interface SearchSuggestions {
+  query: string;
+  papers: { id: string; title: string; year?: number | null }[];
+  authors: { id: string; name: string; papers: number }[];
+  topics: { id: string; name: string; papers: number }[];
+  tags: { id: string; name: string; papers: number }[];
+  projects: { id: string; name: string; papers: number }[];
 }
 
 export interface ChatMessage {
