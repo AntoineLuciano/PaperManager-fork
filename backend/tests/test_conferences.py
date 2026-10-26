@@ -40,6 +40,21 @@ from services.conferences import areas, catalog, institutions, sources, store
     ("Shandong Medical and Pharmaceutical University", [("Shandong Medical and Pharmaceutical University", "A")]),
     ("Liquid AI & MIT", [("Liquid AI", "I"), ("MIT", "A")]),
     ("Department of Physics and Astronomy, University College London", [("University College London", "A")]),
+    ("AXXX", []),
+    ("XXX", []),
+    ("Anonymous Institution", []),
+    ("University", []),
+    ("ML", []),
+    ("e)", []),
+    ("HY", []),
+    ("zzmc@scut.edu.cn", []),
+    ("www.hebtu.edu.cn", []),
+    ("https://xinchenai.com/", []),
+    ("LG", [("LG", "I")]),
+    ("JD.com", [("JD.com", "I")]),
+    ("CAMEL-AI.org", [("CAMEL-AI.org", "I")]),
+    ("Head of AI @ Squirrel AI", [("Squirrel AI", "I")]),
+    ("PALMLab @ Southeast University", [("Southeast University", "A")]),
 ])
 def test_split_and_normalise(raw, expected):
     assert institutions.split_and_normalise(raw) == expected
@@ -388,3 +403,48 @@ async def test_search_endpoints(three_confs, monkeypatch):
 ])
 def test_more_aliases(raw, name):
     assert institutions.split_and_normalise(raw) == [(name, "A")]
+
+
+def test_search_ignores_case(three_confs, monkeypatch):
+    """Caps and small letters are irrelevant: the same results for papers, authors and topics."""
+    from services.conferences import embedder, search
+
+    seen: list[str] = []
+
+    def embed(text):
+        seen.append(text)
+        return _e(0)
+
+    monkeypatch.setattr(embedder, "embed_query", embed)
+
+    def strip(res):
+        """Drop the echoed query and the timing, at every level."""
+        if isinstance(res, dict):
+            return {k: strip(v) for k, v in res.items() if k not in ("query", "ms")}
+        if isinstance(res, list):
+            return [strip(v) for v in res]
+        return res
+
+    variants = ["protein structure diffusion", "PROTEIN STRUCTURE DIFFUSION", "Protein Structure Diffusion"]
+    papers = [strip(search.search_papers(v)) for v in variants]
+    assert papers[0] == papers[1] == papers[2] and papers[0]["title"]
+    names = ["charlotte deane", "CHARLOTTE DEANE", "Charlotte Deane", "cHARLOTTE dEANE"]
+    authors = [strip(search.search_authors(v)) for v in names]
+    assert all(a == authors[0] for a in authors) and authors[0]["total"] == 1
+    topics = [strip(search.topic(v, k=10)) for v in variants]
+    assert topics[0] == topics[1] == topics[2]
+    assert set(seen) == {"protein structure diffusion"}            # the model only ever sees lower case
+    both = [strip(search.search(v)) for v in ("Charlotte Deane", "charlotte deane")]
+    assert both[0] == both[1]
+
+
+def test_search_highlight_and_correction(three_confs):
+    from services.conferences import search
+
+    res = search.search_papers("difusion vid", semantic=False)
+    assert "diffusion" in res["highlight"]["words"] and res["highlight"]["prefixes"] == ["vid"]
+    assert res["corrected"] == "diffusion vid"
+    assert search.search_papers("diffusion")["corrected"] is None
+    a = search.search_authors("Charlote Deane")
+    assert a["corrected"] == "Charlotte Deane" and "charlotte" in a["highlight"]["words"]
+    assert search.search_authors("charlotte deane")["corrected"] is None

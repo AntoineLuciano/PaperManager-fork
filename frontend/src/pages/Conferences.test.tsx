@@ -62,18 +62,23 @@ const SPAPER = {
 
 const SEARCH: ConfSearch = {
   query: "Charlotte Deane", kind: "all", suggested: "author", conferences: [CONF], ms: 12,
-  papers: { query: "Charlotte Deane", title: [], title_total: 0, semantic: [SPAPER], semantic_ready: true, conferences: [CONF] },
+  papers: {
+    query: "Charlotte Deane", title: [], title_total: 0, semantic: [SPAPER], semantic_ready: true, conferences: [CONF],
+    highlight: { words: [], prefixes: [] }, corrected: null,
+  },
   authors: {
-    query: "Charlotte Deane", total: 1, authors: [{
+    query: "Charlotte Deane", total: 1, corrected: null,
+    highlight: { words: ["charlotte", "deane"], prefixes: ["charlotte", "deane"] },
+    authors: [{
       name: "Charlotte Deane", folded: "charlotte deane", score: 100, papers: 1, conference_count: 1, coauthors: 3,
       institutions: [{ name: "University of Oxford", sector: "A", papers: 1 }], identities: [], more_papers: 0,
-      conferences: [{ ...CONF, papers_by_author: [{ ...SPAPER, title: "Antibody docking with diffusion", author_institutions: ["University of Oxford"], author_position: 2 }] }],
+      conferences: [{ ...CONF, papers_by_author: [{ ...SPAPER, title: "Antibody docking with diffusion", authors: 3, author_institutions: ["University of Oxford"], author_position: 2 }] }],
     }],
   },
 };
 
 const STOPIC: ConfSearchTopic = {
-  query: "legged robots", k: 2, threshold: 0.71, total: 3,
+  query: "legged robots", corrected: null, k: 2, threshold: 0.71, total: 3,
   conferences: [{ ...CONF, count: 2, per_1k: 666.67, best: 0.8, top: [SPAPER] }],
   skipped: [], trend: [{ series: "CoRL", slug: "corl", points: [
     { year: 2024, key: "corl2024", count: 1, per_1k: 4.2, papers: 240 },
@@ -135,7 +140,9 @@ describe("Conferences", () => {
     ));
     expect(await screen.findByRole("heading", { name: "Charlotte Deane" })).toBeInTheDocument();
     expect(screen.getByText("Antibody docking with diffusion")).toBeInTheDocument();
-    expect(screen.getByText(/Author 2, at University of Oxford/)).toBeInTheDocument();
+    expect(screen.getByText("2nd of 3 authors · University of Oxford")).toBeInTheDocument();
+    // The matched name is marked, as plain React elements.
+    expect(screen.getByText("Charlotte").tagName).toBe("MARK");
     expect(screen.getByRole("tab", { name: /Authors/ })).toHaveAttribute("aria-selected", "true");
     expect(client.searchConferencesTopic).not.toHaveBeenCalled();
   });
@@ -146,7 +153,7 @@ describe("Conferences", () => {
       "legged robots", { k: 300, series: "", field: "", year_min: null, year_max: null },
     ));
     expect(await screen.findByText(/is published/)).toBeInTheDocument();
-    expect(screen.getByText("2 · 666.7 per 1,000")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.textContent === "2 · 666.7 per 1,000" && el.tagName === "SPAN")).toBeInTheDocument();
     expect(screen.getByText("Universities & institutes, all conferences")).toBeInTheDocument();
     expect(screen.getByText("Legged locomotion with reinforcement learning")).toBeInTheDocument();
   });
@@ -158,5 +165,44 @@ describe("Conferences", () => {
     await user.type(box, "flow matching");
     await waitFor(() => expect(client.searchConferences).toHaveBeenCalledWith("flow matching", expect.objectContaining({ kind: "all" })));
     expect(client.searchConferences).toHaveBeenCalledTimes(1);   // debounced: one request for the whole word
+  });
+
+  it("marks matched title words, offers a correction and keeps a picked tab", async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.searchConferences).mockResolvedValue({
+      ...SEARCH, query: "legged lokomotion", suggested: "paper",
+      papers: { ...SEARCH.papers!, title: [{ ...SPAPER, title_match: "words" }], title_total: 1, semantic: [],
+        highlight: { words: ["legged", "locomotion"], prefixes: [] }, corrected: "legged locomotion" },
+    });
+    renderAt("/conferences?q=legged%20lokomotion");
+    expect(await screen.findByText("Legged").then((el) => el.tagName)).toBe("MARK");
+    expect(screen.getByText("locomotion").tagName).toBe("MARK");
+    expect([...document.querySelectorAll("mark")].map((m) => m.textContent)).toEqual(["Legged", "locomotion"]);
+    await user.click(screen.getByRole("button", { name: "legged locomotion" }));
+    await waitFor(() => expect(client.searchConferences).toHaveBeenLastCalledWith("legged locomotion", expect.anything()));
+    // A tab the user picks stays, whatever the backend suggests for the next query.
+    await user.click(screen.getByRole("tab", { name: /Authors/ }));
+    const box = screen.getByRole("textbox", { name: "Search all conferences" });
+    await user.clear(box);
+    await user.type(box, "video{Enter}");
+    await waitFor(() => expect(client.searchConferences).toHaveBeenLastCalledWith("video", expect.anything()));
+    expect(screen.getByRole("tab", { name: /Authors/ })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("moves through results with the arrow keys and clears with Esc", async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.searchConferences).mockResolvedValue({ ...SEARCH, suggested: "paper" });
+    renderAt("/conferences?q=legged");
+    const box = await screen.findByRole("textbox", { name: "Search all conferences" });
+    const first = await screen.findByRole("button", { name: "Legged locomotion with reinforcement learning" });
+    box.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(first).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+    expect(box).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(box).toHaveValue("");
+    expect(screen.queryByText("Legged locomotion with reinforcement learning")).not.toBeInTheDocument();
+    expect(screen.getByText("Find a paper:")).toBeInTheDocument();
   });
 });

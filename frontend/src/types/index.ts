@@ -712,7 +712,6 @@ export interface ConfSearch {
     semantic_ready: boolean;
     conferences: ConfSearchConf[];
   };
-  authors?: { query: string; total: number; authors: ConfAuthor[] };
 }
 
 export interface ConfSearchTopicInst {
@@ -739,3 +738,15 @@ export interface ConfSearchTopic {
   industry: ConfSearchTopicInst[];
   papers: ConfSearchPaper[];
 }
+    /** Folded word forms to mark in titles. */
+    highlight: { words: string[]; prefixes: string[] };
+    /** The query with typos corrected, when that changed it. */
+    corrected: string | null;
+  };
+  authors?: {
+    query: string;
+    total: number;
+    authors: ConfAuthor[];
+    highlight: { words: string[]; prefixes: string[] };
+    corrected: string | null;
+  corrected: string | null;

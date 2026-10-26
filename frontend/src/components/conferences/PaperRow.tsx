@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { addConferencePaper, getConferencePaper } from "../../api/client";
 import type { ConfArea, ConfPaper, ConfPaperDetail } from "../../types";
+import Highlight, { type HighlightTerms } from "./Highlight";
 
 const DECISION_STYLE: Record<string, string> = {
   Oral: "bg-amber-50 text-amber-700 border-amber-200",
@@ -12,7 +13,8 @@ const DECISION_STYLE: Record<string, string> = {
 /** One conference paper: title, match, area, decision, session, institutions; expands to
  *  abstract, authors with institutions and similar papers; adds itself to the library.
  *  `conference` adds a chip linking to the conference (search across conferences);
- *  `note` is an extra line under the metadata. */
+ *  `note` is an extra line under the metadata; `highlight` marks the query's words in the
+ *  title. The title button carries `data-result` for arrow-key navigation. */
 export default function PaperRow({
   confKey,
   paper,
@@ -21,6 +23,7 @@ export default function PaperRow({
   focusSlug,
   conference,
   note,
+  highlight,
 }: {
   confKey: string;
   paper: ConfPaper;
@@ -29,6 +32,7 @@ export default function PaperRow({
   focusSlug?: string;
   conference?: { key: string; name: string };
   note?: ReactNode;
+  highlight?: HighlightTerms | null;
 }) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<ConfPaperDetail | null>(null);
@@ -67,8 +71,14 @@ export default function PaperRow({
     <div className="py-3 border-b border-line-s last:border-0">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
-          <button type="button" onClick={toggle} className="text-left text-sm font-medium text-ink hover:text-accent">
-            {paper.title}
+          <button
+            type="button"
+            onClick={toggle}
+            data-result=""
+            aria-expanded={open}
+            className="text-left text-sm font-medium text-ink hover:text-accent rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+          >
+            <Highlight text={paper.title} terms={highlight} />
           </button>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-3">
             {conference && (

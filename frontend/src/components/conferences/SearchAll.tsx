@@ -1,14 +1,19 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { searchConferences, searchConferencesTopic } from "../../api/client";
 import type { ConfAuthor, ConfEdition, ConfSearch, ConfSearchPaper, ConfSearchTopic, ConfSearchTopicInst } from "../../types";
 import AreaBar from "./AreaBar";
+import Highlight, { type HighlightTerms } from "./Highlight";
 import PaperRow from "./PaperRow";
 
 type Kind = "paper" | "author" | "topic";
 type AreaDef = { name: string; short: string; color: string };
 
-const EXAMPLES = ["Charlotte Deane", "diffusion models for protein structure", "Gaussian splatting", "flow matching", "Yoshua Bengio"];
+const EXAMPLES: Record<Kind, string[]> = {
+  paper: ["flow matching for generative modeling", "Gaussian splatting", "speculative decoding", "SE(3) diffusion"],
+  author: ["Charlotte Deane", "Yoshua Bengio", "Kaiming He", "Sergey Levine"],
+  topic: ["diffusion models for protein structure", "RL for LLM reasoning", "video generation", "mechanistic interpretability"],
+};
 const FIELD_LABEL: Record<string, string> = { AI: "General AI" };
 const pct = (x: number, d = 0) => `${(x * 100).toFixed(d)}%`;
 const URL_MAX = 300;
@@ -16,16 +21,32 @@ const URL_MAX = 300;
 /** Where to open an institution: its page at the given conference. */
 const instPath = (key: string, slug: string) => `/conferences/${key}?view=institutions&inst=${encodeURIComponent(slug)}`;
 
-function Rows({ papers, areas, title, hint, children }: {
+const ordinal = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+};
+
+/** "5th of 9 authors · University of Oxford" */
+function authorNote(p: ConfSearchPaper): string {
+  const n = p.authors;
+  const pos = p.author_position ?? 0;
+  const role = n <= 1 ? "Sole author" : pos === 1 ? `First of ${n} authors` : pos === n ? `Last of ${n} authors` : `${ordinal(pos)} of ${n} authors`;
+  const inst = p.author_institutions && p.author_institutions.length ? p.author_institutions.join("; ") : "no institution listed";
+  return `${role} · ${inst}`;
+}
+
+function Rows({ papers, areas, title, hint, highlight, children }: {
   papers: ConfSearchPaper[];
   areas: AreaDef[];
   title: string;
   hint?: string;
+  highlight?: HighlightTerms | null;
   children?: ReactNode;
 }) {
   const navigate = useNavigate();
   return (
-    <div className="bg-raised border border-line rounded-xl px-5 py-3">
+    <div className="bg-raised border border-line rounded-xl px-4 sm:px-5 py-3">
       <h3 className="text-sm font-semibold text-ink">{title}</h3>
       {hint && <p className="text-xs text-ink-3">{hint}</p>}
       {papers.map((p) => (
@@ -34,6 +55,7 @@ function Rows({ papers, areas, title, hint, children }: {
           confKey={p.conf_key}
           paper={p}
           areas={areas}
+          highlight={highlight}
           conference={{ key: p.conf_key, name: p.conf_name }}
           onInstitution={(slug) => navigate(instPath(p.conf_key, slug))}
         />
@@ -43,13 +65,28 @@ function Rows({ papers, areas, title, hint, children }: {
   );
 }
 
-function AuthorCard({ a, areas, initiallyOpen }: { a: ConfAuthor; areas: AreaDef[]; initiallyOpen: boolean }) {
+function AuthorCard({ a, areas, initiallyOpen, highlight }: {
+  a: ConfAuthor;
+  areas: AreaDef[];
+  initiallyOpen: boolean;
+  highlight?: HighlightTerms | null;
+}) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(initiallyOpen);
   return (
     <div className="bg-raised border border-line rounded-xl p-4">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <h3 className="text-base font-semibold text-ink">{a.name}</h3>
+        <h3 className="text-[16px] font-semibold text-ink">
+          <button
+            type="button"
+            data-result=""
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+            className="text-left hover:text-accent rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+          >
+            <Highlight text={a.name} terms={highlight} />
+          </button>
+        </h3>
         <span className="text-xs text-ink-3">
           {a.papers} paper{a.papers === 1 ? "" : "s"} at {a.conference_count} conference{a.conference_count === 1 ? "" : "s"} · {a.coauthors} co-author{a.coauthors === 1 ? "" : "s"}
         </span>
@@ -92,11 +129,7 @@ function AuthorCard({ a, areas, initiallyOpen }: { a: ConfAuthor; areas: AreaDef
               paper={p}
               areas={areas}
               onInstitution={(slug) => navigate(instPath(c.key, slug))}
-              note={
-                p.author_institutions && p.author_institutions.length
-                  ? <>Author {p.author_position}, at {p.author_institutions.join("; ")}</>
-                  : <>Author {p.author_position}, no institution listed</>
-              }
+              note={authorNote(p)}
             />
           ))}
         </div>
@@ -115,7 +148,7 @@ function PooledList({ title, list, tone, names }: {
   const navigate = useNavigate();
   const max = list[0]?.count ?? 1;
   return (
-    <div className="bg-raised border border-line rounded-xl p-4">
+    <div className="bg-raised border border-line rounded-xl p-4 min-w-0">
       <h3 className={`text-[11px] font-semibold uppercase tracking-wide mb-2 ${tone === "I" ? "text-orange-600" : "text-blue-600"}`}>{title}</h3>
       {list.length === 0 && <p className="text-xs text-ink-3">{tone === "I" ? "No company authors among these papers." : "No academic authors among these papers."}</p>}
       <div className="space-y-1">
@@ -134,7 +167,7 @@ function PooledList({ title, list, tone, names }: {
                 <span className="block truncate text-ink">{x.name}</span>
                 <span className="block truncate text-[10px] text-ink-3">{by}</span>
               </span>
-              <span className={`h-2 rounded-full ${tone === "I" ? "bg-orange-400" : "bg-blue-400"}`} style={{ width: `${Math.max(6, (70 * x.count) / max)}px` }} />
+              <span className={`h-2 shrink-0 rounded-full ${tone === "I" ? "bg-orange-400" : "bg-blue-400"}`} style={{ width: `${Math.max(6, (60 * x.count) / max)}px` }} />
               <span className="w-6 text-right text-xs tabular-nums text-ink-2">{x.count}</span>
             </button>
           );
@@ -151,9 +184,9 @@ function TopicResult({ t, areas }: { t: ConfSearchTopic; areas: AreaDef[] }) {
   const qParam = t.query.length <= URL_MAX ? `&q=${encodeURIComponent(t.query)}` : "";
   return (
     <>
-      <div className="bg-raised border border-line rounded-xl p-5 space-y-4">
+      <div className="bg-raised border border-line rounded-xl p-4 sm:p-5 space-y-4">
         <div>
-          <div className="text-xl font-semibold text-ink">
+          <div className="text-xl font-semibold text-ink break-words">
             Where <span className="text-accent">“{shortQ}”</span> is published
           </div>
           <div className="text-xs text-ink-2">
@@ -162,21 +195,22 @@ function TopicResult({ t, areas }: { t: ConfSearchTopic; areas: AreaDef[] }) {
           </div>
         </div>
         <div>
-          <div className="text-[11px] font-medium text-ink-3 uppercase tracking-wide mb-1.5">Per conference, per 1,000 of its papers</div>
+          <div className="text-[11px] font-medium text-ink-3 uppercase tracking-wide mb-1.5">Per conference: papers · per 1,000 of its papers</div>
           <div className="space-y-1">
             {t.conferences.map((c) => (
               <Link
                 key={c.key}
+                data-result=""
                 to={`/conferences/${c.key}?view=topics${qParam}`}
                 title={`${c.count} of ${c.papers.toLocaleString()} papers · closest: ${c.top[0]?.title ?? "–"}`}
-                className="flex items-center gap-2 text-sm hover:bg-accent-lo rounded px-1 py-0.5"
+                className="flex items-center gap-2 text-sm hover:bg-accent-lo rounded px-1 py-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
               >
-                <span className="w-28 shrink-0 truncate text-ink">{c.name}</span>
-                <span className="flex-1 h-2.5 rounded-full bg-line-s overflow-hidden">
+                <span className="w-24 sm:w-28 shrink-0 truncate text-ink">{c.name}</span>
+                <span className="flex-1 min-w-0 h-2.5 rounded-full bg-line-s overflow-hidden">
                   <span className="block h-full rounded-full bg-accent" style={{ width: `${(100 * c.per_1k) / maxRate}%` }} />
                 </span>
-                <span className="w-36 shrink-0 text-right text-xs tabular-nums text-ink-2">
-                  {c.count} · {c.per_1k.toFixed(1)} per 1,000
+                <span className="w-20 sm:w-28 shrink-0 text-right text-xs tabular-nums text-ink-2">
+                  {c.count} · {c.per_1k.toFixed(1)}<span className="hidden sm:inline"> per 1,000</span>
                 </span>
               </Link>
             ))}
@@ -232,9 +266,22 @@ function TopicResult({ t, areas }: { t: ConfSearchTopic; areas: AreaDef[] }) {
   );
 }
 
+function DidYouMean({ text, onPick }: { text: string; onPick: (t: string) => void }) {
+  return (
+    <p className="text-sm text-ink-2">
+      Did you mean{" "}
+      <button type="button" onClick={() => onPick(text)} className="font-medium text-accent hover:underline">
+        {text}
+      </button>
+      ? Results include it already.
+    </p>
+  );
+}
+
 /** One search box over every loaded conference: papers (title words, then meaning),
  *  authors (name) and topics (where a topic is published, per conference and year).
- *  The query, tab and filters live in the URL: /conferences?q=...&kind=author. */
+ *  The query, tab and filters live in the URL: /conferences?q=...&kind=author.
+ *  Keys: Enter searches at once, Esc clears, ↑ / ↓ move through the results. */
 export default function SearchAll({ areas, editions }: { areas: AreaDef[]; editions: ConfEdition[] }) {
   const location = useLocation();
   const [params, setParams] = useSearchParams();
@@ -248,12 +295,15 @@ export default function SearchAll({ areas, editions }: { areas: AreaDef[]; editi
   const yearMax = Number(params.get("to")) || null;
   const filters = useMemo(() => ({ series, field, year_min: yearMin, year_max: yearMax }), [series, field, yearMin, yearMax]);
 
+  const rootRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState(urlQ || stateQ);
   const [query, setQuery] = useState((urlQ || stateQ).trim());
   const [res, setRes] = useState<ConfSearch | null>(null);
   const [topic, setTopic] = useState<ConfSearchTopic | null>(null);
   const [loading, setLoading] = useState(false);
   const [topicLoading, setTopicLoading] = useState(false);
+  const [slow, setSlow] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const update = (patch: Record<string, string | null>, replace = false) => {
@@ -283,6 +333,12 @@ export default function SearchAll({ areas, editions }: { areas: AreaDef[]; editi
     update({ q: t && t.length <= URL_MAX ? t : null }, true);
   };
 
+  const pick = (t: string, kind?: Kind) => {
+    setText(t);
+    setQuery(t);
+    update({ q: t.length <= URL_MAX ? t : null, ...(kind ? { kind } : {}) });
+  };
+
   // Search while typing, 300 ms after the last key.
   useEffect(() => {
     const id = setTimeout(() => commit(text), 300);
@@ -310,6 +366,8 @@ export default function SearchAll({ areas, editions }: { areas: AreaDef[]; editi
     };
   }, [query, filters]);
 
+  // The tab: the one the user picked (kept in the URL, never overridden), else the
+  // backend's suggestion for this query.
   const longText = query.split(/\s+/).length > 12;
   const active: Kind = urlKind ?? (longText ? "topic" : res?.suggested ?? "paper");
 
@@ -321,13 +379,58 @@ export default function SearchAll({ areas, editions }: { areas: AreaDef[]; editi
     let live = true;
     setTopicLoading(true);
     searchConferencesTopic(query, { k, ...filters })
-      .then((r) => live && setTopic(r))
+      .then((r) => {
+        if (!live) return;
+        setTopic(r);
+        setError(null);
+      })
       .catch((e) => live && setError(e instanceof Error ? e.message : "Topic search failed"))
       .finally(() => live && setTopicLoading(false));
     return () => {
       live = false;
     };
   }, [query, active, k, filters]);
+
+  // Show "searching" and dim old results only when a request takes long enough to notice.
+  const busy = loading || topicLoading;
+  useEffect(() => {
+    if (!busy) {
+      setSlow(false);
+      return;
+    }
+    const id = setTimeout(() => setSlow(true), 200);
+    return () => clearTimeout(id);
+  }, [busy]);
+  const stale = slow || text.trim() !== query;
+
+  const clear = () => {
+    setText("");
+    setQuery("");
+    setRes(null);
+    setTopic(null);
+    setError(null);
+    update({ q: null, kind: null });
+    boxRef.current?.focus();
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (document.activeElement !== boxRef.current) boxRef.current?.focus();
+      else clear();
+      return;
+    }
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const inBox = e.target === boxRef.current;
+    if (inBox && text.includes("\n")) return;         // a pasted abstract: the caret moves
+    const items = Array.from(rootRef.current?.querySelectorAll<HTMLElement>("[data-result]") ?? []);
+    if (!items.length) return;
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    e.preventDefault();
+    if (e.key === "ArrowDown") items[Math.min(i + 1, items.length - 1)].focus();
+    else if (i <= 0) boxRef.current?.focus();
+    else items[i - 1].focus();
+  };
 
   const seriesOptions = useMemo(() => {
     const m = new Map<string, string>();
@@ -344,27 +447,63 @@ export default function SearchAll({ areas, editions }: { areas: AreaDef[]; editi
   ];
   const select = "border border-line rounded px-1.5 py-1 text-xs bg-raised text-ink-2 focus:outline-none focus:ring-2 focus:ring-violet-300";
 
+  const examples = (kind: Kind, lead: string) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-ink-3">{lead}</span>
+      {EXAMPLES[kind].map((ex) => (
+        <button key={ex} type="button" onClick={() => pick(ex, kind)} className="text-xs px-2 py-0.5 rounded-full border border-line text-ink-2 hover:border-accent-border hover:text-accent">
+          {ex}
+        </button>
+      ))}
+    </div>
+  );
+  const nothing = (what: string, kind: Kind) => (
+    <div className="bg-raised border border-line rounded-xl p-4 space-y-2">
+      <p className="text-sm text-ink-2">{what}</p>
+      {examples(kind, "Try:")}
+    </div>
+  );
+
+  const papers = res?.papers;
+  const authors = res?.authors;
+
   return (
-    <div className="space-y-4">
+    <div ref={rootRef} onKeyDown={onKeyDown} className="space-y-4">
       <section className="bg-raised border border-line rounded-xl p-4 space-y-3">
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-[10px] font-semibold text-accent uppercase tracking-wide">Search all {editions.length} loaded conferences</h2>
-          {res && <span className="text-[11px] text-ink-3">{res.conferences.length} searched{loading || topicLoading ? " · searching…" : ""}</span>}
+          <h2 className="text-[10px] font-semibold text-accent uppercase tracking-wide">Search all loaded conferences</h2>
+          <span className={`text-[11px] text-ink-3 ${slow ? "animate-pulse" : ""}`}>
+            {slow ? "searching…" : res ? `${res.conferences.length} searched` : ""}
+          </span>
         </div>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              commit(text);
-            }
-          }}
-          rows={text.length > 120 ? 4 : 1}
-          aria-label="Search all conferences"
-          placeholder="A paper title, an author or a topic, or paste an abstract"
-          className="w-full border border-line rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-violet-300 resize-none"
-        />
+        <div className="relative">
+          <textarea
+            ref={boxRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                commit(text);
+              }
+            }}
+            rows={text.length > 120 ? 4 : 1}
+            aria-label="Search all conferences"
+            placeholder="A paper title, an author or a topic, or paste an abstract"
+            className="block w-full min-h-[42px] max-h-48 [field-sizing:content] border border-line rounded-lg pl-3 pr-9 py-2 text-[15px] leading-6 text-ink bg-raised placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-violet-300 resize-none"
+          />
+          {text && (
+            <button
+              type="button"
+              onClick={clear}
+              aria-label="Clear search"
+              title="Clear (Esc)"
+              className="absolute right-2 top-2 h-6 w-6 rounded text-ink-3 hover:text-ink hover:bg-line-s"
+            >
+              ×
+            </button>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-1 bg-line-s border border-line rounded-xl p-1" role="tablist">
             {tabs.map((t) => (
@@ -411,61 +550,66 @@ export default function SearchAll({ areas, editions }: { areas: AreaDef[]; editi
             </label>
           )}
         </div>
+        {!query && examples(active, active === "author" ? "Find an author:" : active === "topic" ? "Where is it published:" : "Find a paper:")}
         {!query && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-ink-3">Try:</span>
-            {EXAMPLES.map((ex) => (
-              <button key={ex} type="button" onClick={() => { setText(ex); commit(ex); }} className="text-xs px-2 py-0.5 rounded-full border border-line text-ink-2 hover:border-accent-border hover:text-accent">
-                {ex}
-              </button>
-            ))}
-          </div>
+          <p className="text-[11px] text-ink-3">Enter searches at once · Esc clears · ↑ ↓ move through the results</p>
         )}
         {error && <p className="text-xs text-coral">{error}</p>}
       </section>
 
-      {query && res && active === "paper" && res.papers && (
-        <>
-          {res.papers.title.length > 0 && (
-            <Rows
-              papers={res.papers.title}
-              areas={areas}
-              title={`Title matches · ${res.papers.title_total.toLocaleString()}`}
-              hint={res.papers.title_total > res.papers.title.length ? `The best ${res.papers.title.length}: whole title, start, phrase, then all words, ties by meaning.` : undefined}
-            />
-          )}
-          {res.papers.semantic.length > 0 && (
-            <Rows
-              papers={res.papers.semantic}
-              areas={areas}
-              title="Closest by meaning"
-              hint="Titles closest to the query in bge-small embedding space, not matched by words above."
-            />
-          )}
-          {res.papers.title.length === 0 && res.papers.semantic.length === 0 && <p className="text-sm text-ink-3">No papers found.</p>}
-        </>
-      )}
+      <div className={`space-y-4 transition-opacity duration-150 ${stale ? "opacity-50" : ""}`} aria-busy={busy}>
+        {query && papers && active === "paper" && (
+          <>
+            {papers.corrected && <DidYouMean text={papers.corrected} onPick={(t) => pick(t)} />}
+            {papers.title.length > 0 && (
+              <Rows
+                papers={papers.title}
+                areas={areas}
+                highlight={papers.highlight}
+                title={`Title matches · ${papers.title_total.toLocaleString()}`}
+                hint={papers.title_total > papers.title.length ? `The best ${papers.title.length}: whole title, start, phrase, then all words, ties by meaning.` : undefined}
+              />
+            )}
+            {papers.semantic.length > 0 && (
+              <Rows
+                papers={papers.semantic}
+                areas={areas}
+                highlight={papers.highlight}
+                title="Closest by meaning"
+                hint="Titles closest to the query in bge-small embedding space, not matched by words above."
+              />
+            )}
+            {papers.title.length === 0 && papers.semantic.length === 0 && nothing(`No papers found for “${query}”.`, "paper")}
+          </>
+        )}
 
-      {query && res && active === "author" && res.authors && (
-        <div className="space-y-3">
-          {res.authors.authors.length === 0 && <p className="text-sm text-ink-3">No author with that name at the loaded conferences.</p>}
-          {res.authors.total > res.authors.authors.length && (
-            <p className="text-xs text-ink-3">The best {res.authors.authors.length} of {res.authors.total} matching names.</p>
-          )}
-          {res.authors.authors.map((a, n) => (
-            <AuthorCard key={a.folded} a={a} areas={areas} initiallyOpen={n === 0 || res.authors!.authors.length <= 2} />
-          ))}
-          {res.authors.authors.length > 0 && (
-            <p className="text-[11px] text-ink-3">
-              Names are matched with accents and case folded, so one name can be several people; each paper shows the institution the author gave on it.
-            </p>
-          )}
-        </div>
-      )}
+        {query && authors && active === "author" && (
+          <div className="space-y-3">
+            {authors.corrected && <DidYouMean text={authors.corrected} onPick={(t) => pick(t)} />}
+            {authors.authors.length === 0 && nothing(`No author named “${query}” at the loaded conferences.`, "author")}
+            {authors.total > authors.authors.length && (
+              <p className="text-xs text-ink-3">The best {authors.authors.length} of {authors.total} matching names.</p>
+            )}
+            {authors.authors.map((a, n) => (
+              <AuthorCard key={a.folded} a={a} areas={areas} highlight={authors.highlight} initiallyOpen={n === 0 || authors.authors.length <= 2} />
+            ))}
+            {authors.authors.length > 0 && (
+              <p className="text-[11px] text-ink-3">
+                Names are matched with accents and case folded, so one name can be several people; each paper shows the institution the author gave on it.
+              </p>
+            )}
+          </div>
+        )}
 
-      {query && active === "topic" && (
-        topic ? <TopicResult t={topic} areas={areas} /> : topicLoading ? <p className="text-xs text-ink-3 animate-pulse">Searching all conferences…</p> : null
-      )}
+        {query && active === "topic" && (
+          topic ? (
+            <>
+              {topic.corrected && <p className="text-sm text-ink-2">Searched for “{topic.corrected}”.</p>}
+              <TopicResult t={topic} areas={areas} />
+            </>
+          ) : topicLoading ? <p className="text-xs text-ink-3 animate-pulse">Searching all conferences…</p> : null
+        )}
+      </div>
     </div>
   );
 }

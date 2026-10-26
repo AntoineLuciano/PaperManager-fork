@@ -123,7 +123,16 @@ typing. Three tabs show three readings of the same query; the page opens the one
 (an author's name that matches no title opens **Authors**, a text of more than twelve words
 opens **Topics**, anything else **Papers**). Filters narrow the search to a field (ML, Vision,
 NLP, ...), a series (NeurIPS) or a range of years. Query, tab and filters are kept in the URL
-(`/conferences?q=Charlotte%20Deane&kind=author`), so a search can be shared or bookmarked.
+(`/conferences?q=Charlotte%20Deane&kind=author`), so a search can be shared or bookmarked. A tab
+you pick stays picked for the next query.
+
+Capital and small letters never matter, nor do accents: `CHARLOTTE DEANE`, `charlotte deane`
+and `Charlotte Déane` give the same results. Matched words are marked in titles and names.
+When a word looks like a typo, the page asks "Did you mean ...?" (the results already include
+the corrected word).
+
+Keys: **Enter** searches at once, **Esc** clears the box (or returns to it from a result),
+**↑ / ↓** move through the results, **Enter** on a result opens it.
 
 ### Papers
 
@@ -201,7 +210,11 @@ here.
 - **Academia / industry**: aliases carry it; otherwise a name with "university", "institute",
   "college", "laboratory", "hospital", ... is academia, anything else a company. Non-profit
   institutes (Allen Institute for AI, Mila, Max Planck, Shanghai AI Laboratory) count as academia.
-  "Independent researcher" is not counted.
+  "Independent researcher" is not counted, nor are placeholders and fragments the sources
+  contain: anonymised names ("AXXX", "Anonymous Institution"), bare words ("University", "ML",
+  "Research"), names of one or two letters without an alias ("HY"; "LG" and "HP" are aliases),
+  e-mail addresses and web addresses of universities. "Head of AI @ Squirrel AI" counts as
+  Squirrel AI.
 - **Research areas** are one fixed taxonomy of 24 areas for every conference, so the mix of
   NeurIPS and ICML can be compared and an area keeps its colour everywhere. Each paper gets the
   area whose description is closest to its embedding, after both are centred on the conference's

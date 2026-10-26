@@ -106,7 +106,12 @@ backfill.
   starts with the query 3, phrase 2.5, all words 2, all but one 1 (queries of 3+ words); then
   idf-weighted word coverage, then cosine. Semantic results exclude papers shown as title
   matches; unknown words are replaced by their most frequent one-edit neighbour before
-  embedding, so a typo does not move the query vector.
+  embedding, so a typo does not move the query vector. The response carries `highlight`
+  (`words`: every folded form a query word matched; `prefixes`: words matched as prefixes),
+  which the client marks in titles with React spans, and `corrected` when typo correction
+  changed the query ("did you mean"). Queries are lowercased before embedding (bge-small's
+  tokenizer lowercases too); `test_search_ignores_case` checks that case variants give
+  identical papers, authors and topics.
 - **Authors**: folded full name -> mentions `(paper id, author position)`; name words ->
   names. Every query word must match a name word: exact, prefix (initials, typing) or one edit.
   Score 100 for the full name in any order, 50 + 40 × mean weight otherwise, +5 when the

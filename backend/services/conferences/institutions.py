@@ -42,6 +42,7 @@ _ALIAS_SPEC: list[tuple[str, str, str]] = [
     (r"\bsalesforce\b", "Salesforce", "I"),
     (r"\bsamsung\b", "Samsung", "I"),
     (r"\b(lg ai|lg electronics|^lg$)", "LG", "I"),
+    (r"^hp$|^hp inc\b|\bhewlett.packard\b|^hp labs\b", "HP", "I"),
     (r"\bnaver\b", "NAVER", "I"),
     (r"\bkakao\b", "Kakao", "I"),
     (r"\bsony\b", "Sony", "I"),
@@ -261,9 +262,16 @@ ALIASES = [(re.compile(p), name, sector) for p, name, sector in _ALIAS_SPEC]
 _CANON_SECTOR = {name: sector for _, name, sector in _ALIAS_SPEC}
 CANONICAL = frozenset(_CANON_SECTOR)
 
-# Not institutions: dropped.
-_JUNK = re.compile(r"^(independent( researcher| scholar)?|individual( researcher)?|none|n/?a|unknown|"
-                   r"unaffiliated|self|personal|freelance|private|-+|\.+|student|researcher|phd student)$")
+# Not institutions: dropped. Includes anonymised placeholders ("AXXX", "XXX", "Anonymous
+# Institution"), bare category words ("University", "Company", "ML") and role-only strings.
+_JUNK = re.compile(r"^(independent( researcher| scholar)?|individual( researcher)?|none|null|n/?a|unknown|"
+                   r"unaffiliated|self|personal|freelance|private|-+|\.+|student|researcher|phd student|"
+                   r"a?x{2,}|x+ (university|institute|company|inc)|anonymous( \w+)*|anon|tbd|tba|"
+                   r"confidential|withheld|redacted|hidden|other|others|"
+                   r"company|university|institute|industry|academia|research|lab|ai|ml|cs)$")
+_EMAIL = re.compile(r"^(mailto:)?[\w.+-]+@[\w-]+(\.[\w-]+)+$")
+# A bare web address or an academic / organisational domain says nothing countable.
+_URL = re.compile(r"^(https?://|www\.)|^[\w-]+(\.[\w-]+)*(\.(edu|ac|gov)(\.[a-z]{2})?|\.org\.[a-z]{2})/?$|/$")
 
 _DEPT = re.compile(r"^(dept\.?|department|school of|faculty of|college of|division of|centre for|center for|"
                    r"computer science|electrical|the school of|graduate school|lab(oratory)? of|key lab|state key|"
@@ -393,11 +401,26 @@ def _parts(s: str) -> list[str]:
     return [p for p in final if p]
 
 
+def _junk_name(name: str) -> bool:
+    """A placeholder, a fragment ("e)", "HY"), an e-mail address or a URL. Two-letter names
+    are too ambiguous to count; real ones ("LG", "HP") have aliases, which come first."""
+    f = fold(name)
+    if _JUNK.match(f) or _EMAIL.match(name) or _URL.search(name.strip().lower()):
+        return True
+    return len(re.sub(r"[^a-z0-9]", "", f)) <= 2
+
+
 def split_and_normalise(raw: str) -> list[tuple[str, str]]:
     """One raw affiliation string -> distinct ``(canonical name, sector)`` pairs."""
     s = clean(raw)
-    if not s or _JUNK.match(fold(s)):
+    if not s or _JUNK.match(fold(s)) or _EMAIL.match(s):
         return []
+    if "@" in s:
+        # "Head of AI @ Squirrel AI", "PALMLab @ Southeast University": the organisation
+        # follows the last "@"; what precedes it is a role or a group.
+        s = s.rsplit("@", 1)[1].strip(" ,;.-")
+        if not s:
+            return []
     found: list[tuple[str, str]] = []
     keys: set[str] = set()
     for part in _parts(s):
@@ -416,7 +439,7 @@ def split_and_normalise(raw: str) -> list[tuple[str, str]]:
             else:
                 name = re.sub(r"^(the) ", "", g, flags=re.I).strip(" ,;.-")
                 name = re.sub(r"\s*-\s*$", "", name)
-                if not name or _JUNK.match(fold(name)) or len(name) < 2:
+                if not name or _junk_name(name):
                     continue
                 sec = sector(name)
             k = merge_key(name)

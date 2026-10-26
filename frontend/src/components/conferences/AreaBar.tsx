@@ -65,7 +65,7 @@ export default function AreaBar({
             >
               <i className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: a.color }} />
               <b className="font-semibold text-ink">{a.short}</b>
-              <span>{pct(share)}</span>
+              <span>{share > 0 && share < 0.01 ? "<1%" : pct(share)}</span>
               {over && <span className="text-[10px] font-semibold text-accent">×{(share / cmpShare(a.index)).toFixed(1)}</span>}
             </button>
           );

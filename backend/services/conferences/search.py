@@ -121,6 +121,14 @@ class _Term:
             self.alts.setdefault(v, 0.8)
         self.prefixed: list[str] = vocab.prefixed(w) if prefix else []
 
+    @property
+    def corrected(self) -> str | None:
+        """The vocabulary word a typo stands for, when the word itself is unknown and no
+        known word starts with it."""
+        if self.w in self.alts or self.prefixed or not self.typos:
+            return None
+        return sorted(self.typos)[0]
+
     def postings_size(self, post: dict[str, list[int]]) -> int:
         n = sum(len(post[v]) for v in self.alts)
         n += sum(len(post[v]) for v in self.prefixed)
@@ -301,6 +309,19 @@ def _vectors(ds: store.Dataset, for_counts: bool) -> np.ndarray | None:
     return None
 
 
+def _highlight(terms: list[_Term]) -> dict:
+    """Folded word forms the client marks in titles or names: every form a query word
+    matched (itself, plural, typo neighbours) and the words that match as a prefix."""
+    words: set[str] = set()
+    prefixes: list[str] = []
+    for t in terms:
+        words.add(t.w)
+        words.update(t.alts)
+        if t.prefix:
+            prefixes.append(t.w)
+    return {"words": sorted(words), "prefixes": prefixes}
+
+
 def _corrected(ix: _Index, text: str) -> str:
     """The query with each unknown word of five letters or more replaced by the most
     frequent title word one edit away ("difusion protien" -> "diffusion protein"), so
@@ -326,7 +347,9 @@ def _embed(text: str) -> np.ndarray | None:
     from services.conferences import embedder
 
     try:
-        return embedder.embed_query(text)
+        # bge-small's tokenizer lowercases anyway; doing it here keeps case irrelevant
+        # whatever the model.
+        return embedder.embed_query(text.lower())
     except Exception as exc:  # noqa: BLE001
         log.warning("conference search: query embedding failed (%s)", exc)
         return None
@@ -334,16 +357,21 @@ def _embed(text: str) -> np.ndarray | None:
 
 # ── papers ────────────────────────────────────────────────────────────────────
 
+def _title_terms(ix: _Index, text: str) -> tuple[list[str], list[str], list[_Term]]:
+    words = _words(text)
+    content = [w for w in words if w not in _STOP] or words
+    terms = [_Term(w, ix.tvocab, prefix=(k == len(content) - 1 and w == words[-1] and len(w) >= 2), plural=True)
+             for k, w in enumerate(content)]
+    return words, content, terms
+
+
 def _title_candidates(ix: _Index, allowed: set[int], text: str) -> list[tuple[int, float, float]]:
     """(paper id, tier, coverage) for titles matching the query words. Tiers: 4 the whole
     title, 3 the title starts with the query, 2.5 the query as a phrase, 2 every word,
     1 all but one word (queries of three words or more)."""
-    words = _words(text)
+    words, content, terms = _title_terms(ix, text)
     if not words:
         return []
-    content = [w for w in words if w not in _STOP] or words
-    terms = [_Term(w, ix.tvocab, prefix=(k == len(content) - 1 and w == words[-1] and len(w) >= 2), plural=True)
-             for k, w in enumerate(content)]
     usable = sorted((k for k, t in enumerate(terms) if t.alts or t.prefixed),
                     key=lambda k: terms[k].postings_size(ix.tpost))
     if not usable:
@@ -410,7 +438,8 @@ def search_papers(text: str, limit: int = 20, series: str = "", field: str = "",
     allowed = _select(ix, series, field, year_min, year_max)
     allowed_set = set(allowed)
     hits = _title_candidates(ix, allowed_set, text)
-    q = _embed(_corrected(ix, text)) if semantic and text.strip() else None
+    corrected = _corrected(ix, text)
+    q = _embed(corrected) if semantic and text.strip() else None
     sims = _sims(ix, allowed, q, for_counts=False) if q is not None else {}
 
     def sim_of(doc: int) -> float | None:
@@ -444,7 +473,8 @@ def search_papers(text: str, limit: int = 20, series: str = "", field: str = "",
                 break
     return {
         "query": text, "title": title_rows, "title_total": len(hits), "semantic": semantic_rows,
-        "semantic_ready": bool(sims),
+        "semantic_ready": bool(sims), "highlight": _highlight(_title_terms(ix, text)[2]),
+        "corrected": corrected if corrected.lower() != text.lower() else None,
         "conferences": [_conf(ix.dss[di]) for di in allowed],
     }
 
@@ -459,6 +489,10 @@ def _doc_base(ix: _Index) -> list[int]:
 
 # ── authors ───────────────────────────────────────────────────────────────────
 
+def _name_terms(ix: _Index, text: str) -> list[_Term]:
+    return [_Term(w, ix.nvocab, prefix=True, plural=False) for w in _words(text)]
+
+
 def _author_matches(ix: _Index, allowed: set[int], text: str) -> list[tuple[int, float, int]]:
     """(name id, score, papers in the selected conferences). Every query word must match a
     word of the name, exactly (1.0), as a prefix (0.9: initials, typing) or one edit away
@@ -466,7 +500,7 @@ def _author_matches(ix: _Index, allowed: set[int], text: str) -> list[tuple[int,
     q = _words(text)
     if not q:
         return []
-    terms = [_Term(w, ix.nvocab, prefix=True, plural=False) for w in q]
+    terms = _name_terms(ix, text)
     usable = [k for k, t in enumerate(terms) if (t.alts or t.prefixed) and len(t.w) >= 2]
     if len(usable) == 0 or any(not (t.alts or t.prefixed) for t in terms):
         return []
@@ -572,8 +606,12 @@ def search_authors(text: str, limit: int = 20, series: str = "", field: str = ""
     ix = index()
     allowed = set(_select(ix, series, field, year_min, year_max))
     matches = _author_matches(ix, allowed, text)
+    terms = _name_terms(ix, text)
+    corrected = None
+    if matches and any(t.corrected for t in terms):
+        corrected = _author_card(ix, matches[0][0], matches[0][1], allowed, None, paper_cap=0)["name"]
     return {
-        "query": text, "total": len(matches),
+        "query": text, "total": len(matches), "highlight": _highlight(terms), "corrected": corrected,
         "authors": [_author_card(ix, nid, score, allowed, library) for nid, score, _ in matches[:limit]],
     }
 
@@ -635,7 +673,8 @@ def topic(text: str, k: int = 300, series: str = "", field: str = "", year_min: 
     k = max(10, min(int(k), 2000))
     ix = index()
     allowed = _select(ix, series, field, year_min, year_max)
-    q = _embed(_corrected(ix, text))
+    corrected = _corrected(ix, text)
+    q = _embed(corrected)
     if q is None:
         raise RuntimeError("The embedding model is not available, so topic search cannot run.")
     sims = _sims(ix, allowed, q, for_counts=True)
@@ -643,7 +682,7 @@ def topic(text: str, k: int = 300, series: str = "", field: str = "", year_min: 
                 "reason": "not indexed yet" if ix.dss[di].emb is None else "title index is being built"}
                for di in allowed if di not in sims]
     if not sims:
-        return {"query": text, "k": 0, "threshold": None, "total": 0, "conferences": [], "skipped": skipped,
+        return {"query": text, "corrected": None, "k": 0, "threshold": None, "total": 0, "conferences": [], "skipped": skipped,
                 "trend": [], "areas": [], "with_industry": 0, "with_institution": 0,
                 "academia": [], "industry": [], "papers": []}
     allsims = np.concatenate([sims[di] for di in sims])
@@ -723,7 +762,8 @@ def topic(text: str, k: int = 300, series: str = "", field: str = "", year_min: 
         return rows
 
     return {
-        "query": text, "k": len(pool), "threshold": round(thr, 4), "total": int(len(allsims)),
+        "query": text, "corrected": corrected if corrected.lower() != text.lower() else None,
+        "k": len(pool), "threshold": round(thr, 4), "total": int(len(allsims)),
         "conferences": confs, "skipped": skipped, "trend": trend,
         "areas": store._area_list(area_counts), "with_industry": with_ind, "with_institution": with_inst,
         "academia": side("A"), "industry": side("I"),

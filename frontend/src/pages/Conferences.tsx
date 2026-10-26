@@ -53,8 +53,9 @@ function Landing() {
     navigate(`/conferences/${e.key}`);
   };
 
+  // Conferences with data on disk, also while one is being refreshed (it stays searchable).
   const loaded = useMemo(
-    () => (cat?.conferences ?? []).filter((c) => c.state === "ready" || c.state === "partial" || (c.state === "embedding" && c.papers)),
+    () => (cat?.conferences ?? []).filter((c) => !["none", "unavailable", "error"].includes(c.state)),
     [cat],
   );
 
@@ -160,12 +161,12 @@ function Overview({ ov, onView, onInstitution }: {
       <div className="grid md:grid-cols-2 gap-4">
         <button type="button" onClick={() => onView("institutions")} className="text-left bg-raised border border-line rounded-xl p-5 hover:border-accent-border">
           <div className="text-[10px] font-semibold text-accent uppercase tracking-wide">Institutions</div>
-          <div className="mt-1 text-base font-semibold text-ink">Find a university, lab or company</div>
+          <div className="mt-1 text-[16px] font-semibold text-ink">Find a university, lab or company</div>
           <p className="mt-1 text-xs text-ink-2">Rank, paper count (full and fractional), research-area mix against the conference, collaborators and every paper.</p>
         </button>
         <button type="button" onClick={() => onView("topics")} className="text-left bg-raised border border-line rounded-xl p-5 hover:border-accent-border">
           <div className="text-[10px] font-semibold text-accent uppercase tracking-wide">Topics & papers</div>
-          <div className="mt-1 text-base font-semibold text-ink">Who publishes on your topic?</div>
+          <div className="mt-1 text-[16px] font-semibold text-ink">Who publishes on your topic?</div>
           <p className="mt-1 text-xs text-ink-2">Type a topic or paste an abstract: the closest papers, and which universities and companies wrote them.</p>
         </button>
       </div>
