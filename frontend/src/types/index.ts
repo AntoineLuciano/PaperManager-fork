@@ -711,6 +711,17 @@ export interface ConfSearch {
     semantic: ConfSearchPaper[];
     semantic_ready: boolean;
     conferences: ConfSearchConf[];
+    /** Folded word forms to mark in titles. */
+    highlight: { words: string[]; prefixes: string[] };
+    /** The query with typos corrected, when that changed it. */
+    corrected: string | null;
+  };
+  authors?: {
+    query: string;
+    total: number;
+    authors: ConfAuthor[];
+    highlight: { words: string[]; prefixes: string[] };
+    corrected: string | null;
   };
 }
 
@@ -725,6 +736,7 @@ export interface ConfSearchTopicInst {
 
 export interface ConfSearchTopic {
   query: string;
+  corrected: string | null;
   k: number;
   threshold: number | null;
   total: number;
@@ -738,15 +750,3 @@ export interface ConfSearchTopic {
   industry: ConfSearchTopicInst[];
   papers: ConfSearchPaper[];
 }
-    /** Folded word forms to mark in titles. */
-    highlight: { words: string[]; prefixes: string[] };
-    /** The query with typos corrected, when that changed it. */
-    corrected: string | null;
-  };
-  authors?: {
-    query: string;
-    total: number;
-    authors: ConfAuthor[];
-    highlight: { words: string[]; prefixes: string[] };
-    corrected: string | null;
-  corrected: string | null;
