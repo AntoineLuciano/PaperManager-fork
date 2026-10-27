@@ -11,6 +11,7 @@ papers entered the conversation and link back to them.
 """
 from __future__ import annotations
 
+import json
 import re
 
 from mcp.server.fastmcp import FastMCP
@@ -18,6 +19,7 @@ from mcp.server.fastmcp import FastMCP
 from config import settings
 from db.connection import get_driver
 from db.queries.visibility import paper_visibility_clause
+from services.library_lookup import lookup as _lookup
 from services.library_search.engine import Filters, search as _search
 
 # Claude Code moves MCP results above ~50 KB out of context into a file, which the
@@ -74,7 +76,35 @@ def _split_note(content: str, full: bool) -> dict:
     return out
 
 
+def library_lookup(dois: list[str] | None = None, titles: list[str] | None = None, project: str = "") -> dict:
+    """Batch existence check behind the MCP tool of the same name (services/library_lookup.py)."""
+    return _lookup(get_driver(), dois, titles, project, url_base=settings.frontend_url)
+
+
 def register(mcp: FastMCP):
+    @mcp.tool(name="library_lookup", structured_output=False)
+    def _library_lookup(dois: list[str] = [], titles: list[str] = [], project: str = "") -> str:  # noqa: B006
+        """Cheap batch check of which papers are ALREADY in the library. Call it before
+        add_paper_metadata / upload_pdf for a list of cited papers, so nothing is added twice;
+        far cheaper than search_papers or library_search (no summaries, abstracts or snippets).
+
+        Up to 200 items per call. Pass `dois`, `titles`, or both paired by index (item i is
+        dois[i] with titles[i]; use "" for a missing one): the DOI is tried first, then the
+        title. DOIs are normalised (case, https://doi.org/, doi: prefixes, trailing dot) and
+        arXiv forms are one id (10.48550/arXiv.2210.02747 = arXiv:2210.02747 = 2210.02747v2).
+        Titles are compared lowercased with markup and everything but a-z0-9 removed: exact
+        first, else the first 45 such characters. A paper stored under its bioRxiv DOI is
+        missed by the journal DOI, so give titles too when you have them.
+
+        Returns compact JSON: `found`, `missing`, and per item `{query, kind, match}` where
+        kind is doi | title_exact | title_prefix | null and match is null or
+        `{id, title, doi, year, projects, reference_stub, has_text, url}` (a list plus
+        `duplicates: n` when several papers match). `reference_stub` = citation stub from a
+        reference list (no PDF or notes); it counts as present but may deserve upload_pdf.
+        `project` (name or id) adds `in_project` per match; add_to_project links a found
+        paper that is not in it yet."""
+        return json.dumps(library_lookup(dois, titles, project), ensure_ascii=False, separators=(",", ":"))
+
     @mcp.tool()
     def library_search(query: str, project: str = "", limit: int = 12) -> dict:
         """Search the whole library for a topic and report WHERE each paper matched.

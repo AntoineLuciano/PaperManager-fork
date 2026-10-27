@@ -160,7 +160,7 @@ topic is published, per conference and over the years.
 
     ---
 
-    The MCP server gives Claude Desktop and Claude Code 40 tools to search, read and edit
+    The MCP server gives Claude Desktop and Claude Code 41 tools to search, read and edit
     your library.
 
     [:octicons-arrow-right-24: MCP server](user-guide/mcp-server.md)

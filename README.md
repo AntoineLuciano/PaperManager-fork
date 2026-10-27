@@ -25,7 +25,7 @@ one Neo4j knowledge graph you can search and chat with.
 | **Project concept map** | Key concepts and their relations across every paper in a project, as an interactive graph filtered by author, year and kind. |
 | **Knowledge chat** | Ask across the whole library in a desk-style layout: citations open the paper beside the chat, answers get interactive concept cards (formula, plot, animation, short note) and 3D molecules from the PDB or AlphaFold DB ([3Dmol.js](https://3dmol.csb.pitt.edu)). Scope with `@project:`, `@topic:`, `@tag:`, `@paper:`, `@person:`, `@user:`; graph-aware, with optional web search. Claude, Claude Code or any OpenAI-compatible model. |
 | **Conference explorer** | Browse NeurIPS, ICML, ICLR, CVPR, ICCV, ECCV, ACL, EMNLP, AAAI, CoRL and more by institution (rank, research-area mix, collaborators, papers) or by topic (who publishes most on it, closest papers), or search all loaded conferences at once for a paper, an author or where a topic is published. Data from the official conference sites and [Paper Copilot](https://github.com/papercopilot/paperlists), embedded on your own server. |
-| **MCP server** | 40 tools for Claude Desktop and Claude Code: search, read, annotate, upload, merge duplicates, query conferences. |
+| **MCP server** | 41 tools for Claude Desktop and Claude Code: search, batch-check what is already in the library, read, annotate, upload, merge duplicates, query conferences. |
 | **More** | Knowledge graph and Cypher editor, cross-paper synthesis, research-gap finder, author tracking, duplicate merge manager, BibTeX export, multi-user accounts with shared projects. |
 
 <table>

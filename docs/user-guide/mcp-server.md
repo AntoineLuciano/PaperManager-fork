@@ -42,6 +42,7 @@ Ask Claude: *"Can you list my recent papers?"* — Claude should call `search_pa
 | Tool | Description |
 |------|-------------|
 | `search_papers` | Search by keyword, tag, topic, project, or person |
+| `library_lookup` | Which of up to 200 DOIs / titles are already in the library: one compact line per item (id, projects, citation stub or not), no summaries. Use it before adding cited papers so nothing is added twice |
 | `get_paper_detail` | Full paper metadata for one paper |
 | `chat_with_paper` | Ask a question about a paper's content |
 | `add_note` | Write or update a paper's markdown note |

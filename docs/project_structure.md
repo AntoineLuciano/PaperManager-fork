@@ -217,6 +217,7 @@ backend/
 | Tool | What it does |
 |---|---|
 | `search_papers` | Search by keyword, tag, topic, project, person |
+| `library_lookup` | Batch check which DOIs / titles are already in the library (before adding cited papers) |
 | `get_paper` | Get full details of one paper by id |
 | `add_paper_metadata` | Add a paper without a PDF (title, year, doi, etc.) |
 | `get_note` | Read the markdown note for a paper |

@@ -48,6 +48,7 @@ conversation. Results stay under ~31 KB: Claude Code moves larger MCP results in
 
 | Tool | Description |
 |---|---|
+| `library_lookup` | Batch existence check before adding cited papers: up to 200 `dois` and/or `titles` (paired by index) in two Cypher queries. Match by normalised DOI (arXiv forms one id, bioRxiv versions dropped), else normalised title (`[a-z0-9]` only, markup stripped) exactly, else on its first 45 characters; `kind` says which. Per item only id, title, DOI, year, projects, `reference_stub`, `has_text`, `url` (a list with `duplicates` when several papers match); `project` adds `in_project`. Compact JSON, about 350 bytes per found item. Logic in `services/library_lookup.py` |
 | `library_search` | One query across metadata, notes, highlights and their comments, claims and extracted full text; each hit says where it matched, with snippets. `project` filters by project name or id |
 | `get_paper_context` | Metadata, authors, tags, topics, projects, the note (own text split from saved chat answers), every highlight with page, colour and comment, claims, `text_chars` |
 | `read_paper_text` | Extracted full text, 30 000 characters per call from `offset`; page with `next_offset` |
