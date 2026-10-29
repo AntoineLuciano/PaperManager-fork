@@ -111,6 +111,7 @@ class PersonOut(BaseModel):
     cv_updated_at: str | None = None
     photo: str | None = None           # small JPEG data URI
     photo_source: str | None = None
+    aliases: list[str] | None = None    # names of people merged into this one
 
 
 class PersonEnrichOut(BaseModel):

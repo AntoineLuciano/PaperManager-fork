@@ -62,6 +62,20 @@ export interface CvEntry {
   source: string;
 }
 
+export interface DuplicatePerson {
+  id: string;
+  name: string;
+  affiliation?: string | null;
+  paper_count: number;
+  degree: number;
+}
+
+/** People that look like one person; the first is the suggested keeper. */
+export interface PersonDuplicateGroup {
+  reasons: string[];
+  people: DuplicatePerson[];
+}
+
 export interface PersonCv {
   updated_at: string;
   name: string;

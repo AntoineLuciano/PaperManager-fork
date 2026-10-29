@@ -2,11 +2,11 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   apiFetch, setPersonTracked,
-  enrichPerson, enrichAllPeople, refreshPersonCv,
+  enrichPerson, enrichAllPeople, refreshPersonCv, findPeopleDuplicates, mergePeople,
   addPersonTag, removePersonTag,
   getPersonNote, savePersonNote,
 } from "../api/client";
-import type { Person, PersonCv, Paper, Tag, Note, StartupRole } from "../types";
+import type { Person, PersonCv, PersonDuplicateGroup, Paper, Tag, Note, StartupRole } from "../types";
 import NoteEditor from "../components/NoteEditor";
 
 // ── Tag groups for the Q&A-style Tags tab ─────────────────────────────────────
@@ -189,6 +189,7 @@ export default function People() {
   const [enrichAllMsg, setEnrichAllMsg] = useState("");
   const [filter, setFilter]       = useState<PeopleFilter>("all");
   const [search, setSearch]       = useState("");
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
   const [searchParams] = useSearchParams();
 
@@ -215,6 +216,7 @@ export default function People() {
   }, [filter]);
 
   const selectPerson = async (p: PersonSummary) => {
+    setShowDuplicates(false);
     setLoading(true);
     try {
       const detail = await apiFetch<PersonDetail>(`/people/${p.id}`);
@@ -276,6 +278,13 @@ export default function People() {
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
           <h1 className="text-sm font-semibold text-gray-900">People</h1>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowDuplicates((v) => !v)}
+              title="Find people listed more than once (spelling, middle or first initials)"
+              className={`text-xs transition-colors ${showDuplicates ? "text-violet-600" : "text-gray-400 hover:text-violet-600"}`}
+            >
+              ⧉ Dups
+            </button>
             <button
               onClick={handleEnrichAll}
               disabled={enrichingAll}
@@ -391,19 +400,27 @@ export default function People() {
 
       {/* ── Right: person detail ── */}
       <main className="flex-1 overflow-hidden bg-gray-50 flex flex-col">
-        {loading && (
+        {!showDuplicates && loading && (
           <div className="flex items-center justify-center h-full text-sm text-gray-400">
             Loading…
           </div>
         )}
 
-        {!loading && !selected && (
+        {showDuplicates && (
+          <DuplicatesPanel
+            onClose={() => setShowDuplicates(false)}
+            onMerged={() => fetchPeople().then(setPeople).catch(() => {})}
+            onOpen={(id) => { const p = people.find((x) => x.id === id); if (p) selectPerson(p); }}
+          />
+        )}
+
+        {!showDuplicates && !loading && !selected && (
           <div className="flex items-center justify-center h-full text-sm text-gray-400">
             Select a person to see their profile.
           </div>
         )}
 
-        {!loading && selected && (
+        {!showDuplicates && !loading && selected && (
           <PersonDetailPanel
             key={selected.id}
             person={selected}
@@ -411,6 +428,124 @@ export default function People() {
           />
         )}
       </main>
+    </div>
+  );
+}
+
+// ── Duplicates panel ─────────────────────────────────────────────────────────
+
+function DuplicatesPanel({ onClose, onMerged, onOpen }: {
+  onClose: () => void;
+  onMerged: () => void;
+  onOpen: (personId: string) => void;
+}) {
+  const [groups, setGroups]   = useState<PersonDuplicateGroup[] | null>(null);
+  const [error, setError]     = useState("");
+  const [keepers, setKeepers] = useState<Record<number, string>>({});
+  const [busy, setBusy]       = useState<number | "all" | null>(null);
+  const [done, setDone]       = useState(0);
+
+  const scan = () => {
+    setGroups(null);
+    setError("");
+    setKeepers({});
+    findPeopleDuplicates()
+      .then((r) => setGroups(r.groups))
+      .catch((e) => setError(e instanceof Error ? e.message : "Scan failed"));
+  };
+  useEffect(scan, []);
+
+  const mergeGroup = async (i: number) => {
+    const g = groups![i];
+    const keep = keepers[i] ?? g.people[0].id;
+    await mergePeople(keep, g.people.map((p) => p.id).filter((id) => id !== keep));
+    setDone((n) => n + g.people.length - 1);
+  };
+
+  const run = async (target: number | "all") => {
+    if (!groups) return;
+    setBusy(target);
+    setError("");
+    try {
+      const indexes = target === "all" ? groups.map((_, i) => i) : [target];
+      for (const i of indexes) await mergeGroup(i);
+      setGroups(groups.filter((_, i) => !indexes.includes(i)));
+      setKeepers({});
+      onMerged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Merge failed");
+      scan();
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="max-w-3xl mx-auto space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Duplicate people</h2>
+            <p className="text-xs text-gray-500">
+              Same name up to accents and middle initials, or initials matching the only full name.
+              Merging moves papers, tags and notes to the kept person and keeps the other names as aliases.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={scan} disabled={busy !== null}
+              className="text-xs text-gray-500 hover:text-violet-600 disabled:opacity-40">↻ Rescan</button>
+            {groups && groups.length > 1 && (
+              <button onClick={() => run("all")} disabled={busy !== null}
+                className="px-3 py-1.5 text-xs font-medium bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-40">
+                {busy === "all" ? "Merging…" : `Merge all ${groups.length}`}
+              </button>
+            )}
+            <button onClick={onClose} className="text-xs text-gray-400 hover:text-gray-600">Close</button>
+          </div>
+        </div>
+
+        {done > 0 && (
+          <div className="text-xs text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+            {done} {done === 1 ? "person" : "people"} merged.
+          </div>
+        )}
+        {error && (
+          <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>
+        )}
+        {!groups && !error && <p className="text-sm text-gray-400">Scanning…</p>}
+        {groups && groups.length === 0 && <p className="text-sm text-gray-400">No duplicates found.</p>}
+
+        {groups?.map((g, i) => {
+          const keep = keepers[i] ?? g.people[0].id;
+          return (
+            <div key={g.people.map((p) => p.id).join()} className="bg-white border border-gray-200 rounded-xl p-4">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <p className="text-xs text-gray-400">{g.reasons.join(" · ")}</p>
+                <button onClick={() => run(i)} disabled={busy !== null}
+                  className="px-2.5 py-1 text-xs font-medium text-violet-700 border border-violet-200 rounded-lg hover:bg-violet-50 disabled:opacity-40">
+                  {busy === i ? "Merging…" : "Merge"}
+                </button>
+              </div>
+              <ul className="space-y-1">
+                {g.people.map((p) => (
+                  <li key={p.id} className="flex items-center gap-2 text-sm">
+                    <input type="radio" name={`keep-${i}`} checked={keep === p.id}
+                      onChange={() => setKeepers((k) => ({ ...k, [i]: p.id }))}
+                      title="Keep this one" className="accent-violet-600" />
+                    <button onClick={() => onOpen(p.id)} className="font-medium text-gray-900 hover:text-violet-700 text-left">
+                      {p.name}
+                    </button>
+                    {keep === p.id && <span className="text-[10px] uppercase tracking-wide text-violet-600">keep</span>}
+                    <span className="text-xs text-gray-400 truncate">
+                      {[p.affiliation, `${p.paper_count} paper${p.paper_count === 1 ? "" : "s"}`].filter(Boolean).join(" · ")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
