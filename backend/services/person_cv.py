@@ -86,7 +86,7 @@ _NICKNAMES = [
 
 def _name_words(name: str | None) -> list[str]:
     name = name or ""
-    if "," in name:  # "Luciano, Antoine" -> "Antoine Luciano"
+    if "," in name:  # "Doe, Jane" -> "Jane Doe"
         last, _, first = name.partition(",")
         name = f"{first} {last}"
     return _fold(name).split()
@@ -348,7 +348,7 @@ def fetch_wikidata(openalex_id: str | None, orcid_id: str | None) -> dict:
     query = ("SELECT ?item ?image ?site WHERE { { " + " } UNION { ".join(keys) + " } "
              "OPTIONAL { ?item wdt:P18 ?image } OPTIONAL { ?item wdt:P856 ?site } } LIMIT 1")
     data = _get_json("https://query.wikidata.org/sparql", params={"query": query, "format": "json"},
-                     headers={"User-Agent": "PaperManager/1.0 (https://github.com/AntoineLuciano/PaperManager; researcher CV)"})
+                     headers={"User-Agent": "PaperManager/1.0 (https://github.com/NiklasAbraham/PaperManager; researcher CV)"})
     rows = ((data or {}).get("results") or {}).get("bindings") or []
     if not rows:
         return {}
@@ -362,7 +362,7 @@ def fetch_photo(url: str) -> str | None:
     try:
         from PIL import Image
         r = httpx.get(url, verify=_ssl(), timeout=20, follow_redirects=True,
-                      headers={"User-Agent": "PaperManager/1.0 (https://github.com/AntoineLuciano/PaperManager; researcher CV)"})
+                      headers={"User-Agent": "PaperManager/1.0 (https://github.com/NiklasAbraham/PaperManager; researcher CV)"})
         if r.status_code != 200:
             return None
         img = Image.open(BytesIO(r.content)).convert("RGB")
