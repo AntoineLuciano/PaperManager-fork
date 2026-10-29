@@ -210,7 +210,7 @@ def suggest_tags(body: SuggestBody):
     # ── Strategy B: Claude Work (work gateway) ───────────────────────────
     import json as _json
     from config import settings as _settings
-    import anthropic, httpx
+    import anthropic
     from services.tag_suggester import build_prompt, parse_response, _SKIP
     from services.user_ai_config import get_effective_ai_config
 
@@ -224,7 +224,7 @@ def suggest_tags(body: SuggestBody):
         try:
             kwargs: dict = {
                 "api_key": work_key,
-                "http_client": httpx.Client(verify=_ssl),
+                "http_client": anthropic.DefaultHttpxClient(verify=_ssl),
             }
             if work_base:
                 kwargs["base_url"] = work_base

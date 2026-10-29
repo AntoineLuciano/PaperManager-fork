@@ -1102,7 +1102,6 @@ def ai_extract_metadata(paper_id: str):
     """Use LLM (Claude Work → Claude personal → Ollama) to extract abstract, year, and DOI."""
     import json as _json
     import anthropic as _anthropic
-    import httpx as _httpx
     from config import settings as _settings
     from services.user_ai_config import get_effective_ai_config
     from services.pdf_parser import find_doi, YEAR_RE, _PUBLISHED_YEAR_RE
@@ -1160,7 +1159,7 @@ def ai_extract_metadata(paper_id: str):
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
-            kwargs: dict = {"api_key": _work_key, "http_client": _httpx.Client(verify=False)}
+            kwargs: dict = {"api_key": _work_key, "http_client": _anthropic.DefaultHttpxClient(verify=False)}
             if _work_base:
                 kwargs["base_url"] = _work_base
             client = _anthropic.Anthropic(**kwargs)

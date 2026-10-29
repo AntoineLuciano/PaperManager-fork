@@ -566,7 +566,7 @@ def _claude_extract(text: str, *, prefer_work: bool = True) -> list[dict]:
 
     attempts = []
     if work_key and prefer_work:
-        kwargs: dict = {"api_key": work_key, "http_client": httpx.Client(verify=False), "timeout": _AI_TIMEOUT}
+        kwargs: dict = {"api_key": work_key, "http_client": anthropic.DefaultHttpxClient(verify=False), "timeout": _AI_TIMEOUT}
         if work_base:
             kwargs["base_url"] = work_base
         attempts.append(("Claude Work", kwargs, "claude-sonnet-4-6"))
@@ -574,7 +574,7 @@ def _claude_extract(text: str, *, prefer_work: bool = True) -> list[dict]:
         attempts.append(("Claude personal", {
             "api_key": personal_key,
             "base_url": "https://api.anthropic.com",
-            "http_client": httpx.Client(verify=settings.ssl_verify if settings.ssl_verify is not False else False),
+            "http_client": anthropic.DefaultHttpxClient(verify=settings.ssl_verify if settings.ssl_verify is not False else False),
             "timeout": _AI_TIMEOUT,
         }, "claude-haiku-4-5-20251001"))
 

@@ -214,7 +214,6 @@ def ai_extract_authors(paper_id: str):
     """Use Claude Work (→ personal → Ollama) to extract full author info from the first page."""
     import json as _json
     import anthropic as _anthropic
-    import httpx as _httpx
     import logging as _logging
     from config import settings as _settings
     from services.user_ai_config import get_effective_ai_config
@@ -272,7 +271,7 @@ def ai_extract_authors(paper_id: str):
     # 2. Claude Work
     if result is None and _work_key:
         try:
-            kwargs: dict = {"api_key": _work_key, "http_client": _httpx.Client(verify=False)}
+            kwargs: dict = {"api_key": _work_key, "http_client": _anthropic.DefaultHttpxClient(verify=False)}
             if _work_base:
                 kwargs["base_url"] = _work_base
             client = _anthropic.Anthropic(**kwargs)
